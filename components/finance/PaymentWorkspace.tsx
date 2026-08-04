@@ -1,0 +1,22 @@
+"use client";
+
+import { useState } from "react";
+
+type Payment = { id:string; beneficiary:string; bank:string; currency:string; amount:number; purpose:string; status:string; created:string };
+const initial:Payment[]=[
+{id:"PAY-26091",beneficiary:"Kekule",bank:"HDFC Bank",currency:"USD",amount:207000,purpose:"Supplier settlement",status:"Approval",created:"03 Aug"},
+{id:"PAY-26090",beneficiary:"Apple Shipping",bank:"Emirates NBD",currency:"AED",amount:84500,purpose:"Freight charges",status:"Processing",created:"03 Aug"},
+{id:"PAY-26089",beneficiary:"JEA Port",bank:"Emirates Islamic",currency:"AED",amount:245000,purpose:"Port release",status:"Completed",created:"02 Aug"},
+];
+function money(v:number){return new Intl.NumberFormat("en-US",{maximumFractionDigits:0}).format(v)}
+export function PaymentWorkspace(){
+ const [rows,setRows]=useState<Payment[]>(()=>{if(typeof window==="undefined")return initial;const s=localStorage.getItem("vtc-payments");return s?JSON.parse(s) as Payment[]:initial});
+ const [form,setForm]=useState({beneficiary:"",bank:"",currency:"AED",amount:"",purpose:""});
+ function save(next:Payment[]){setRows(next);localStorage.setItem("vtc-payments",JSON.stringify(next))}
+ function add(){if(!form.beneficiary||!form.amount)return;save([{id:`PAY-${Date.now().toString().slice(-5)}`,beneficiary:form.beneficiary,bank:form.bank||"TBC",currency:form.currency,amount:Number(form.amount),purpose:form.purpose||"Commercial payment",status:"Draft",created:"Today"},...rows]);setForm({beneficiary:"",bank:"",currency:"AED",amount:"",purpose:""})}
+ function nextStatus(id:string){const states=["Draft","Approval","Processing","Completed"];save(rows.map(r=>r.id===id?{...r,status:states[(states.indexOf(r.status)+1)%states.length]}:r))}
+ return <main className="min-h-screen bg-[#060a12] p-5 text-white md:p-8"><div className="mx-auto max-w-[1500px]"><header><p className="text-xs uppercase tracking-[.24em] text-blue-400">Banking Execution</p><h1 className="mt-2 text-3xl font-bold">Payment Control</h1><p className="mt-2 text-sm text-slate-400">Create payment instructions, progress approvals and record execution status.</p></header>
+ <section className="mt-7 grid gap-3 rounded-2xl border border-slate-800 bg-[#0d1423] p-5 md:grid-cols-6"><input placeholder="Beneficiary" value={form.beneficiary} onChange={e=>setForm({...form,beneficiary:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 outline-none"/><input placeholder="Bank" value={form.bank} onChange={e=>setForm({...form,bank:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 outline-none"/><select value={form.currency} onChange={e=>setForm({...form,currency:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"><option>AED</option><option>USD</option><option>EUR</option><option>IRR</option></select><input type="number" placeholder="Amount" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 outline-none"/><input placeholder="Purpose" value={form.purpose} onChange={e=>setForm({...form,purpose:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 outline-none"/><button onClick={add} className="rounded-xl bg-blue-600 px-4 py-3 font-semibold hover:bg-blue-500">Create</button></section>
+ <section className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1423]"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-950/70 text-xs uppercase text-slate-500"><tr>{["Reference","Beneficiary","Bank","Amount","Purpose","Created","Status"].map(h=><th key={h} className="px-5 py-4">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map(r=><tr key={r.id}><td className="px-5 py-4 font-mono text-xs text-blue-300">{r.id}</td><td className="px-5 py-4 font-semibold">{r.beneficiary}</td><td className="px-5 py-4 text-slate-400">{r.bank}</td><td className="px-5 py-4">{r.currency} {money(r.amount)}</td><td className="px-5 py-4 text-slate-400">{r.purpose}</td><td className="px-5 py-4">{r.created}</td><td className="px-5 py-4"><button onClick={()=>nextStatus(r.id)} className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold hover:border-blue-500">{r.status}</button></td></tr>)}</tbody></table></div></section>
+ </div></main>
+}

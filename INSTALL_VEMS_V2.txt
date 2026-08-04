@@ -1,0 +1,12 @@
+VEMS V2 FULL PROJECT
+
+1. Keep your current VEMS folder as backup.
+2. Extract this ZIP into a new folder named VEMS_V2.
+3. Copy your existing .env.local into VEMS_V2.
+4. Open VEMS_V2 in VS Code.
+5. Run:
+   npm.cmd install
+   npm.cmd run build
+   npm.cmd run dev
+
+Do not extract this package over the old project until the build succeeds.

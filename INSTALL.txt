@@ -1,0 +1,7 @@
+1) Extract this ZIP directly inside the VEMS project root.
+2) Confirm replacement of components/dashboard/DashboardPage.tsx.
+3) Stop Node: taskkill /F /IM node.exe
+4) Build: npm.cmd run build
+5) Start: npm.cmd run dev
+6) Open http://localhost:3000 and press Ctrl+F5.
+Expected visible text: Executive Command Center and Dashboard V3 Active.
