@@ -1,0 +1,11 @@
+-- Applied to Supabase project VTC ONE on 2026-08-08.
+-- Operational Core Release 9 creates the production workflow tables and RLS policies for:
+-- suppliers, opportunities, quotations, quotation_items, shipments, invoices, payments,
+-- approvals, tasks, notifications, documents, and activity_log.
+-- It also adds common updated_at triggers and authenticated/admin role policies.
+--
+-- The canonical migration was applied through the Supabase management API and is recorded
+-- in Supabase migration history as: operational_core_release_9.
+--
+-- Do not replay this marker file as schema SQL. Future schema changes should be added as
+-- new timestamped migrations rather than editing this historical marker.
