@@ -5,136 +5,84 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DashboardPage } from "@/components/dashboard/DashboardPage";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { initialDeals, initialUsers } from "@/lib/demo-data";
+import { LiveDashboardPage } from "@/components/dashboard/LiveDashboardPage";
 import { createClient } from "@/lib/supabase/client";
-import type { Deal, User } from "@/types";
 
-function normalizeRole(role?: string): User["role"] {
-  const normalizedRole = role?.trim().toLowerCase();
-
-  if (normalizedRole === "admin") return "Admin";
-  if (normalizedRole === "finance") return "Finance";
-  if (normalizedRole === "manager") return "Manager";
-  return "Dealer";
-}
+type AuthenticatedProfile = {
+  id: string;
+  fullName: string;
+};
 
 export default function Home() {
   const router = useRouter();
-
-  const [users, setUsers] = useLocalStorage<User[]>("vtc-users", initialUsers);
-  const [deals] = useLocalStorage<Deal[]>("vtc-deals", initialDeals);
-
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<AuthenticatedProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    const demoSession = window.localStorage.getItem("vtc-demo-session");
-
-    if (demoSession) {
+    async function loadUser() {
       try {
-        const demoUser = JSON.parse(demoSession) as User;
-        setCurrentUser(demoUser);
-        setIsLoading(false);
-        return;
-      } catch {
-        window.localStorage.removeItem("vtc-demo-session");
-      }
-    }
+        const supabase = createClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-    let supabase: ReturnType<typeof createClient>;
-
-    try {
-      supabase = createClient();
-    } catch {
-      router.replace("/login");
-      return;
-    }
-
-    async function loadAuthenticatedUser() {
-      setIsLoading(true);
-      setAuthError("");
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        if (isMounted) router.replace("/login");
-        return;
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError || !profile || profile.active === false) {
-        await supabase.auth.signOut();
-
-        if (isMounted) {
-          setAuthError(
-            profile?.active === false
-              ? "Your account has been deactivated."
-              : "User profile was not found.",
-          );
-          setIsLoading(false);
+        if (userError || !user) {
           router.replace("/login");
+          return;
         }
-        return;
-      }
 
-      const authenticatedUser: User = {
-        id: user.id,
-        username: profile.username ?? user.email ?? "user",
-        password: "",
-        fullName:
-          profile.full_name ??
-          profile.fullName ??
-          profile.name ??
-          user.user_metadata?.full_name ??
-          user.email ??
-          "VTC User",
-        role: normalizeRole(profile.role),
-        active: true,
-      };
+        const { data: userProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id,full_name,active")
+          .eq("id", user.id)
+          .single();
 
-      if (isMounted) {
-        setCurrentUser(authenticatedUser);
-        setUsers((previousUsers) => {
-          const exists = previousUsers.some(
-            (item) => item.id === authenticatedUser.id,
-          );
+        if (profileError || !userProfile) {
+          if (mounted) {
+            setAuthError("User profile was not found.");
+            setIsLoading(false);
+          }
+          return;
+        }
 
-          return exists
-            ? previousUsers.map((item) =>
-                item.id === authenticatedUser.id ? authenticatedUser : item,
-              )
-            : [authenticatedUser, ...previousUsers];
-        });
-        setIsLoading(false);
+        if (userProfile.active === false) {
+          await supabase.auth.signOut();
+          router.replace("/login");
+          return;
+        }
+
+        if (mounted) {
+          setProfile({
+            id: user.id,
+            fullName: userProfile.full_name || user.email || "VTC User",
+          });
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (mounted) {
+          setAuthError(error instanceof Error ? error.message : "Authentication failed.");
+          setIsLoading(false);
+        }
       }
     }
 
-    void loadAuthenticatedUser();
+    void loadUser();
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
-  }, [router, setUsers]);
+  }, [router]);
 
   if (isLoading) {
     return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center bg-[#060a12] text-white">
+      <main className="flex min-h-screen items-center justify-center bg-[#060a12] text-white">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500" />
-          <p className="mt-5 text-sm text-slate-400">Loading VTC ONE...</p>
+          <p className="mt-5 text-sm text-slate-400">Loading live VTC ONE data...</p>
         </div>
       </main>
     );
@@ -142,7 +90,7 @@ export default function Home() {
 
   if (authError) {
     return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center bg-[#060a12] px-5 text-white">
+      <main className="flex min-h-screen items-center justify-center bg-[#060a12] px-5 text-white">
         <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-red-500/10 p-6">
           <h1 className="font-semibold text-red-300">Authentication error</h1>
           <p className="mt-2 text-sm text-red-200">{authError}</p>
@@ -151,14 +99,7 @@ export default function Home() {
     );
   }
 
-  if (!currentUser) return null;
+  if (!profile) return null;
 
-  return (
-    <div className="relative p-5 md:p-8">
-      <div className="fixed bottom-4 right-4 z-50 rounded-full border border-blue-400/30 bg-blue-600 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-2xl">
-        Dashboard V2 Active
-      </div>
-      <DashboardPage deals={deals} users={users} />
-    </div>
-  );
+  return <LiveDashboardPage userId={profile.id} fullName={profile.fullName} />;
 }
