@@ -1,0 +1,14 @@
+{
+  "name": "VTC ONE Enterprise Platform",
+  "short_name": "VTC ONE",
+  "description": "VTC Group enterprise operations platform",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060a12",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    { "src": "/vtc-one-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
