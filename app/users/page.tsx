@@ -1,35 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent,useEffect,useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
-import { UsersPage } from "@/components/users/UsersPage";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { initialUsers } from "@/lib/demo-data";
-import type { User } from "@/types";
-
-export default function UsersRoute() {
-  const [users, setUsers] = useLocalStorage<User[]>("vtc-users", initialUsers);
-  const [currentUser, setCurrentUser] = useState<User>(initialUsers[0]);
-
-  useEffect(() => {
-    const session = window.localStorage.getItem("vtc-demo-session");
-
-    if (!session) return;
-
-    try {
-      setCurrentUser(JSON.parse(session) as User);
-    } catch {
-      window.localStorage.removeItem("vtc-demo-session");
-    }
-  }, []);
-
-  return (
-    <div className="p-5 md:p-8">
-      <UsersPage
-        users={users}
-        currentUser={currentUser}
-        onChange={setUsers}
-      />
-    </div>
-  );
+type Profile={id:string;full_name:string|null;role:string;active:boolean;created_at?:string};
+export default function UsersRoute(){
+ const[me,setMe]=useState<Profile|null>(null);const[users,setUsers]=useState<Profile[]>([]);const[form,setForm]=useState({full_name:"",email:"",password:"",role:"dealer"});const[message,setMessage]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(true);
+ async function load(){const s=createClient();const{data:{user}}=await s.auth.getUser();if(!user){setLoading(false);return}const{data:p}=await s.from("profiles").select("id,full_name,role,active,created_at").eq("id",user.id).single();setMe(p as Profile);if(p?.role==="admin"){const{data}=await s.from("profiles").select("id,full_name,role,active,created_at").order("created_at",{ascending:true});setUsers((data??[]) as Profile[])}setLoading(false)}
+ useEffect(()=>{void load()},[]);
+ async function create(e:FormEvent){e.preventDefault();setError("");setMessage("");const s=createClient();const{data,error}=await s.functions.invoke("admin-create-user",{body:form});if(error){setError(error.message);return}if(data?.error){setError(data.error);return}setMessage(`User ${form.email} created successfully.`);setForm({full_name:"",email:"",password:"",role:"dealer"});await load()}
+ async function toggle(u:Profile){if(u.id===me?.id)return;const s=createClient();const{error}=await s.from("profiles").update({active:!u.active}).eq("id",u.id);if(error){setError(error.message);return}await load()}
+ if(loading)return <main className="p-8 text-slate-400">Loading users...</main>;if(me?.role!=="admin")return <main className="p-8 text-red-300">Access denied. Administrator permission is required.</main>;
+ return <main className="p-5 text-white md:p-8"><div><p className="text-sm text-slate-500">Real Supabase authentication and access control</p><h2 className="mt-1 text-2xl font-semibold">User Management</h2></div>
+ <form onSubmit={create} className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-[#0d1424] p-5 md:grid-cols-5"><input required placeholder="Full name" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"/><input required type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"/><input required minLength={8} type="password" placeholder="Password (8+ chars)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"/><select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"><option value="admin">Admin</option><option value="ceo">CEO</option><option value="manager">Manager</option><option value="dealer">Dealer</option><option value="finance">Finance</option></select><button className="rounded-xl bg-blue-600 px-4 py-3 font-semibold">Create User</button></form>
+ {error&&<p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}{message&&<p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+ <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1424]">{users.map(u=><div key={u.id} className="flex items-center justify-between border-b border-slate-800 p-5 last:border-0"><div><p className="font-medium">{u.full_name||"Unnamed user"}</p><p className="mt-1 text-xs uppercase text-slate-500">{u.role}</p></div><button onClick={()=>void toggle(u)} disabled={u.id===me?.id} className={`rounded-xl px-4 py-2 text-sm ${u.active?"bg-emerald-500/10 text-emerald-400":"bg-red-500/10 text-red-400"} disabled:opacity-40`}>{u.active?"Active":"Disabled"}</button></div>)}</div></main>;
 }
