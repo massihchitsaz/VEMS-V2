@@ -1,2 +1,5 @@
-import { QuotationsWorkbench } from "@/components/commercial/QuotationsWorkbench";
-export default function Page(){return <QuotationsWorkbench/>}
+import { QuotationBuilder } from "@/components/commercial/QuotationBuilder";
+
+export default function Page() {
+  return <QuotationBuilder />;
+}
