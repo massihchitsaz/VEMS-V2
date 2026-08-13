@@ -1,0 +1,1 @@
+Trigger Cloudflare redeploy after header logo removal.
