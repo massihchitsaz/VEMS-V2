@@ -56,7 +56,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#070b14] px-4">
       <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d1422] p-8 shadow-2xl">
         <div className="mb-8">
-          <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 font-bold text-white">V</div>
+          <img src="/vtc-group-logo.svg" alt="VTC Group" className="mb-5 h-16 w-auto object-contain" />
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-blue-400">VTC GROUP</p>
           <h1 className="mt-2 text-2xl font-semibold text-white">Secure Login</h1>
           <p className="mt-2 text-sm text-slate-400">VTC ONE Enterprise Platform</p>
