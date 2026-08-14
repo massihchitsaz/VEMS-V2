@@ -1,2 +1,2 @@
-import { FinanceRegister } from "@/components/finance/FinanceRegister";
-export default function PayablesPage(){ return <FinanceRegister kind="payable"/>; }
+import { PayablesWorkspace } from "@/components/finance/PayablesWorkspace";
+export default function PayablesPage(){ return <PayablesWorkspace/>; }
