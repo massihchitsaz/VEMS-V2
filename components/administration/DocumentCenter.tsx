@@ -1,102 +1,29 @@
 "use client";
+import {useEffect,useMemo,useState} from "react";
+import {deleteDocument,downloadDocument,getDocumentActivity,getDocumentCenter,openDocument,registerDocument,updateDocument,uploadNewVersion,type DocumentRecord} from "@/lib/document-center";
 
-import { useEffect, useMemo, useState } from "react";
-import { initialDocuments, type DocumentRecord, type DocumentStatus } from "@/lib/administration-data";
+const statuses=["draft","under_review","approved","rejected","expired","superseded","cancelled"], modules=["LOGISTICS","COMMERCIAL","TREASURY","FINANCE","ADMIN","COMPLIANCE"], entityTypes=["shipment","deal","quotation","customer","supplier","general"];
+const docTypes=["Bill of Lading","Air Waybill","Commercial Invoice","Packing List","Certificate of Origin","Customs Declaration","Delivery Order","DG Declaration","MSDS/SDS","Insurance Certificate","Inspection Certificate","Health/Phytosanitary Certificate","Import/Export Permit","Delivery Note / POD","KYC Document","Contract / Agreement","Bank / Payment Document","Other"];
+const input="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500";
+const empty:any={entity_type:"shipment",entity_id:"",document_type:"Bill of Lading",title:"",reference_no:"",module:"LOGISTICS",category:"Shipping Document",status:"draft",version:1,effective_date:"",expiry_date:"",is_required:false,confidentiality:"internal",notes:""};
+const pretty=(v:string|null|undefined)=>(v??"—").replaceAll("_"," ");
+function badge(v:string|null){const c=v==="approved"?"border-emerald-800 bg-emerald-950/50 text-emerald-300":v==="under_review"?"border-amber-800 bg-amber-950/50 text-amber-300":v==="rejected"||v==="expired"||v==="cancelled"?"border-red-900 bg-red-950/40 text-red-300":v==="superseded"?"border-slate-700 bg-slate-900 text-slate-400":"border-blue-900 bg-blue-950/30 text-blue-300";return `rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${c}`}
 
-const storageKey = "vems-documents-v1";
-const statuses: DocumentStatus[] = ["DRAFT", "UNDER_REVIEW", "APPROVED", "EXPIRED"];
+export function DocumentCenter(){
+ const[data,setData]=useState<any>({documents:[],links:{},profiles:[]}),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[query,setQuery]=useState(""),[moduleFilter,setModuleFilter]=useState("ALL"),[statusFilter,setStatusFilter]=useState("ALL"),[entityFilter,setEntityFilter]=useState("ALL"),[editing,setEditing]=useState<any|null>(null),[file,setFile]=useState<File|null>(null),[selected,setSelected]=useState<DocumentRecord|null>(null),[activity,setActivity]=useState<any[]>([]),[versionFile,setVersionFile]=useState<File|null>(null),[saving,setSaving]=useState(false);
+ const load=async()=>{setError(null);try{setData(await getDocumentCenter())}catch(e:any){setError(e.message)}finally{setLoading(false)}};useEffect(()=>{void load()},[]);
+ const documents=data.documents as DocumentRecord[];const now=new Date();
+ const filtered=useMemo(()=>documents.filter(d=>{const hay=[d.title,d.reference_no,d.document_type,d.file_name,d.uploader?.full_name].join(" ").toLowerCase();return(!query||hay.includes(query.toLowerCase()))&&(moduleFilter==="ALL"||d.module===moduleFilter)&&(statusFilter==="ALL"||d.status===statusFilter)&&(entityFilter==="ALL"||d.entity_type===entityFilter)}),[documents,query,moduleFilter,statusFilter,entityFilter]);
+ const metrics=useMemo(()=>({total:documents.length,review:documents.filter(d=>d.status==="under_review").length,expiring:documents.filter(d=>d.expiry_date&&new Date(d.expiry_date)>=now&&new Date(d.expiry_date).getTime()-now.getTime()<=30*86400000).length,expired:documents.filter(d=>d.status==="expired"||(d.expiry_date&&new Date(d.expiry_date)<now)).length}),[documents]);
+ const openDetail=async(d:DocumentRecord)=>{setSelected(d);setVersionFile(null);try{setActivity(await getDocumentActivity(d.id))}catch(e:any){setError(e.message)}};
+ const saveNew=async()=>{if(!file){setError("Select a file to upload.");return}if(!editing.title){setError("Document title is required.");return}setSaving(true);try{await registerDocument({...editing,entity_id:editing.entity_id||null,effective_date:editing.effective_date||null,expiry_date:editing.expiry_date||null},file);setEditing(null);setFile(null);await load()}catch(e:any){setError(e.message)}finally{setSaving(false)}};
+ const changeStatus=async(d:DocumentRecord,status:string)=>{try{await updateDocument(d.id,{status},`status_${status}`);await load();if(selected?.id===d.id)await openDetail({...d,status})}catch(e:any){setError(e.message)}};
+ return <main className="p-5 text-white md:p-8"><header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end"><div><p className="text-xs font-semibold uppercase tracking-[.22em] text-blue-400">VTC Information & Compliance Control</p><h1 className="mt-2 text-3xl font-bold">Document Control Center</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">Secure document register for shipment, commercial, finance and compliance files with approvals, expiry control and version history.</p></div><div className="flex gap-2"><button onClick={()=>void load()} className="rounded-xl border border-slate-700 px-4 py-3 text-sm">Refresh</button><button onClick={()=>{setEditing({...empty});setFile(null)}} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold">+ Register Document</button></div></header>{error&&<div className="mt-5 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Total Documents",metrics.total],["Under Review",metrics.review],["Expiring ≤30 Days",metrics.expiring],["Expired / Past Due",metrics.expired]].map(([l,v])=><div key={String(l)} className="rounded-2xl border border-slate-800 bg-[#0d1423] p-5"><p className="text-xs text-slate-500">{l}</p><p className="mt-3 text-3xl font-bold">{v}</p></div>)}</section>
+ <section className="mt-5 rounded-2xl border border-slate-800 bg-[#0d1423] p-4"><div className="grid gap-3 lg:grid-cols-4"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search title, reference, type or file..." className={input}/><select value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} className={input}><option>ALL</option>{modules.map(x=><option key={x}>{x}</option>)}</select><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className={input}><option>ALL</option>{statuses.map(x=><option key={x} value={x}>{pretty(x)}</option>)}</select><select value={entityFilter} onChange={e=>setEntityFilter(e.target.value)} className={input}><option>ALL</option>{entityTypes.map(x=><option key={x} value={x}>{pretty(x)}</option>)}</select></div></section>
+ <section className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1423]"><div className="overflow-x-auto"><table className="w-full min-w-[1450px] text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr>{["Document","Type","Linked To","Module","Version","Validity","Confidentiality","Status","Owner","Actions"].map(h=><th key={h} className="px-4 py-4">{h}</th>)}</tr></thead><tbody>{loading?<tr><td colSpan={10} className="p-8 text-center text-slate-500">Loading documents...</td></tr>:filtered.length===0?<tr><td colSpan={10} className="p-8 text-center text-slate-500">No documents match the current filters.</td></tr>:filtered.map(d=><tr key={d.id} className="border-b border-slate-800/80 align-top"><td className="px-4 py-4"><button onClick={()=>void openDetail(d)} className="font-semibold text-blue-400">{d.title||d.file_name}</button><div className="mt-1 text-xs text-slate-500">{d.reference_no||d.file_name}</div></td><td className="px-4 py-4">{d.document_type||"—"}</td><td className="px-4 py-4 capitalize">{d.entity_type}{d.entity_id?<div className="text-xs text-slate-500">linked record</div>:null}</td><td className="px-4 py-4">{d.module||"—"}</td><td className="px-4 py-4">v{d.version??1}</td><td className="px-4 py-4">{d.effective_date||"—"}<div className="text-xs text-slate-500">Exp {d.expiry_date||"—"}</div></td><td className="px-4 py-4 capitalize">{d.confidentiality||"internal"}</td><td className="px-4 py-4"><span className={badge(d.status)}>{pretty(d.status)}</span></td><td className="px-4 py-4">{d.uploader?.full_name||"—"}</td><td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button onClick={()=>void openDocument(d.storage_path)} className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-400">Open</button><button onClick={()=>void downloadDocument(d.storage_path,d.file_name)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Download</button><button onClick={()=>void openDetail(d)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Control</button></div></td></tr>)}</tbody></table></div></section>
+ {editing&&<div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 md:p-8"><div className="mx-auto max-w-5xl rounded-3xl border border-slate-700 bg-[#0b1120] p-6"><div className="flex justify-between"><div><p className="text-xs uppercase tracking-wider text-blue-400">Controlled Upload</p><h2 className="mt-1 text-2xl font-bold">Register Document</h2></div><button onClick={()=>setEditing(null)} className="text-2xl">×</button></div><div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3"><F label="Title" value={editing.title} onChange={v=>setEditing({...editing,title:v})}/><F label="Reference No." value={editing.reference_no} onChange={v=>setEditing({...editing,reference_no:v})}/><label className="text-xs text-slate-400">Document Type<select value={editing.document_type} onChange={e=>setEditing({...editing,document_type:e.target.value})} className={`${input} mt-2`}>{docTypes.map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs text-slate-400">Module<select value={editing.module} onChange={e=>setEditing({...editing,module:e.target.value})} className={`${input} mt-2`}>{modules.map(x=><option key={x}>{x}</option>)}</select></label><F label="Category" value={editing.category} onChange={v=>setEditing({...editing,category:v})}/><label className="text-xs text-slate-400">Linked Entity<select value={editing.entity_type} onChange={e=>setEditing({...editing,entity_type:e.target.value,entity_id:""})} className={`${input} mt-2`}>{entityTypes.map(x=><option key={x} value={x}>{pretty(x)}</option>)}</select></label>{editing.entity_type!=="general"&&<label className="text-xs text-slate-400">Linked Record<select value={editing.entity_id} onChange={e=>setEditing({...editing,entity_id:e.target.value})} className={`${input} mt-2`}><option value="">Select record</option>{(data.links[editing.entity_type]??[]).map((x:any)=><option key={x.id} value={x.id}>{x.label}</option>)}</select></label>}<F label="Effective Date" type="date" value={editing.effective_date} onChange={v=>setEditing({...editing,effective_date:v})}/><F label="Expiry Date" type="date" value={editing.expiry_date} onChange={v=>setEditing({...editing,expiry_date:v})}/><label className="text-xs text-slate-400">Confidentiality<select value={editing.confidentiality} onChange={e=>setEditing({...editing,confidentiality:e.target.value})} className={`${input} mt-2`}>{["public","internal","confidential","restricted"].map(x=><option key={x}>{x}</option>)}</select></label><label className="flex items-end gap-2 pb-3 text-sm"><input type="checkbox" checked={!!editing.is_required} onChange={e=>setEditing({...editing,is_required:e.target.checked})}/> Required document</label><label className="text-xs text-slate-400 md:col-span-2 lg:col-span-3">File<input type="file" onChange={e=>setFile(e.target.files?.[0]??null)} className={`${input} mt-2`}/></label><label className="text-xs text-slate-400 md:col-span-2 lg:col-span-3">Notes<textarea value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})} className={`${input} mt-2 min-h-24`}/></label></div><div className="mt-6 flex justify-end gap-2"><button onClick={()=>setEditing(null)} className="rounded-xl border border-slate-700 px-5 py-3">Cancel</button><button disabled={saving} onClick={()=>void saveNew()} className="rounded-xl bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{saving?"Uploading...":"Upload & Register"}</button></div></div></div>}
+ {selected&&<div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 md:p-8"><div className="mx-auto max-w-6xl rounded-3xl border border-slate-700 bg-[#0b1120] p-6"><div className="flex flex-col justify-between gap-4 md:flex-row"><div><p className="text-xs uppercase tracking-wider text-blue-400">Document Control File</p><h2 className="mt-1 text-2xl font-bold">{selected.title||selected.file_name}</h2><p className="mt-1 text-sm text-slate-400">{selected.reference_no||selected.file_name} · Version {selected.version??1}</p></div><button onClick={()=>setSelected(null)} className="self-start text-2xl">×</button></div><div className="mt-6 grid gap-4 lg:grid-cols-3"><section className="rounded-2xl border border-slate-800 bg-slate-950/40 p-5 lg:col-span-2"><h3 className="font-semibold">Control & Approval</h3><div className="mt-4 flex flex-wrap gap-2">{statuses.map(s=><button key={s} disabled={selected.status===s} onClick={()=>void changeStatus(selected,s)} className={`rounded-lg border px-3 py-2 text-xs capitalize ${selected.status===s?"border-blue-700 bg-blue-950/50 text-blue-300":"border-slate-700"}`}>{pretty(s)}</button>)}</div><div className="mt-5 grid gap-3 sm:grid-cols-2"><button onClick={()=>void openDocument(selected.storage_path)} className="rounded-xl border border-blue-900 px-4 py-3 text-sm text-blue-400">Open Secure File</button><button onClick={()=>void downloadDocument(selected.storage_path,selected.file_name)} className="rounded-xl border border-slate-700 px-4 py-3 text-sm">Download File</button></div><div className="mt-6 border-t border-slate-800 pt-5"><h3 className="font-semibold">Upload New Version</h3><p className="mt-1 text-xs text-slate-500">Creates a new controlled record and marks this version as superseded.</p><div className="mt-3 flex flex-col gap-3 md:flex-row"><input type="file" onChange={e=>setVersionFile(e.target.files?.[0]??null)} className={input}/><button disabled={!versionFile} onClick={async()=>{if(!versionFile)return;try{await uploadNewVersion(selected,versionFile,"New controlled revision");setSelected(null);await load()}catch(e:any){setError(e.message)}}} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold disabled:opacity-40">Create Revision</button></div></div></section><section className="rounded-2xl border border-slate-800 bg-slate-950/40 p-5"><h3 className="font-semibold">Metadata</h3><div className="mt-4 space-y-2 text-sm text-slate-300"><p>Type: {selected.document_type||"—"}</p><p>Module: {selected.module||"—"}</p><p>Entity: {selected.entity_type||"—"}</p><p>Confidentiality: {pretty(selected.confidentiality)}</p><p>Effective: {selected.effective_date||"—"}</p><p>Expiry: {selected.expiry_date||"—"}</p><p>Approved by: {selected.approver?.full_name||"—"}</p><p>Approved at: {selected.approved_at?new Date(selected.approved_at).toLocaleString():"—"}</p></div>{selected.status!=="approved"&&<button onClick={async()=>{if(!confirm(`Delete ${selected.title||selected.file_name}?`))return;try{await deleteDocument(selected);setSelected(null);await load()}catch(e:any){setError(e.message)}}} className="mt-5 w-full rounded-xl border border-red-900 px-4 py-3 text-sm text-red-400">Delete Document</button>}</section></div><section className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/40 p-5"><h3 className="font-semibold">Activity History</h3><div className="mt-4 space-y-3">{activity.length===0?<p className="text-sm text-slate-500">No activity recorded yet.</p>:activity.map((a:any)=><div key={a.id} className="flex justify-between gap-4 border-b border-slate-800 pb-3 text-sm"><div><p className="font-medium capitalize">{pretty(a.action)}</p><p className="text-xs text-slate-500">{a.comments||"No comment"}</p></div><div className="text-right text-xs text-slate-500">{a.actor?.full_name||"User"}<br/>{new Date(a.created_at).toLocaleString()}</div></div>)}</div></section></div></div>}
+ </main>}
 
-function statusClass(status: DocumentStatus) {
-  if (status === "APPROVED") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-  if (status === "UNDER_REVIEW") return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-  if (status === "EXPIRED") return "border-red-500/30 bg-red-500/10 text-red-300";
-  return "border-slate-600 bg-slate-800 text-slate-300";
-}
-
-export function DocumentCenter() {
-  const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
-  const [query, setQuery] = useState("");
-  const [moduleFilter, setModuleFilter] = useState("ALL");
-
-  useEffect(() => {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      try { setDocuments(JSON.parse(raw) as DocumentRecord[]); } catch { localStorage.removeItem(storageKey); }
-    }
-  }, []);
-
-  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(documents)); }, [documents]);
-
-  const filtered = useMemo(() => documents.filter((document) => {
-    const matchesQuery = `${document.title} ${document.reference} ${document.owner}`.toLowerCase().includes(query.toLowerCase());
-    const matchesModule = moduleFilter === "ALL" || document.module === moduleFilter;
-    return matchesQuery && matchesModule;
-  }), [documents, moduleFilter, query]);
-
-  const summary = useMemo(() => ({
-    total: documents.length,
-    approved: documents.filter((item) => item.status === "APPROVED").length,
-    review: documents.filter((item) => item.status === "UNDER_REVIEW").length,
-    expired: documents.filter((item) => item.status === "EXPIRED").length,
-  }), [documents]);
-
-  function cycleStatus(id: string) {
-    setDocuments((current) => current.map((item) => {
-      if (item.id !== id) return item;
-      const nextIndex = (statuses.indexOf(item.status) + 1) % statuses.length;
-      return { ...item, status: statuses[nextIndex], updatedAt: new Date().toISOString() };
-    }));
-  }
-
-  return (
-    <main className="min-h-screen bg-[#060a12] p-5 text-white md:p-8">
-      <div className="mx-auto max-w-[1600px]">
-        <header className="mb-7 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-400">VTC Group Information Control</p>
-            <h1 className="mt-2 text-3xl font-bold">Document Center</h1>
-            <p className="mt-2 text-sm text-slate-400">Control commercial, treasury, logistics and compliance documents from one register.</p>
-          </div>
-          <button type="button" className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500">+ Register Document</button>
-        </header>
-
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[["Total Documents", summary.total, "text-blue-400"], ["Approved", summary.approved, "text-emerald-400"], ["Under Review", summary.review, "text-amber-300"], ["Expired", summary.expired, "text-red-400"]].map(([label, value, color]) => (
-            <article key={String(label)} className="rounded-2xl border border-slate-800 bg-[#0d1423] p-5">
-              <p className="text-sm text-slate-400">{label}</p>
-              <p className={`mt-3 text-3xl font-bold ${color}`}>{value}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1423]">
-          <div className="flex flex-col gap-3 border-b border-slate-800 p-5 md:flex-row">
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, reference or owner..." className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
-            <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500">
-              {["ALL", "COMMERCIAL", "TREASURY", "LOGISTICS", "FINANCE", "ADMIN"].map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Document</th><th className="px-5 py-4">Module</th><th className="px-5 py-4">Reference</th><th className="px-5 py-4">Owner</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Updated</th><th className="px-5 py-4">Action</th></tr></thead>
-              <tbody className="divide-y divide-slate-800">
-                {filtered.map((document) => (
-                  <tr key={document.id} className="hover:bg-slate-900/50">
-                    <td className="px-5 py-4"><p className="font-semibold text-white">{document.title}</p><p className="mt-1 text-xs text-slate-500">{document.id} · {document.category}</p></td>
-                    <td className="px-5 py-4 text-slate-300">{document.module}</td>
-                    <td className="px-5 py-4 text-blue-300">{document.reference}</td>
-                    <td className="px-5 py-4 text-slate-300">{document.owner}</td>
-                    <td className="px-5 py-4"><span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(document.status)}`}>{document.status.replace("_", " ")}</span></td>
-                    <td className="px-5 py-4 text-slate-400">{new Date(document.updatedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td className="px-5 py-4"><button type="button" onClick={() => cycleStatus(document.id)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-blue-500 hover:text-white">Advance Status</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </main>
-  );
-}
+function F({label,value,onChange,type="text"}:{label:string,value:any,onChange:(v:string)=>void,type?:string}){return <label className="text-xs text-slate-400">{label}<input type={type} value={value??""} onChange={e=>onChange(e.target.value)} className={`${input} mt-2`}/></label>}
