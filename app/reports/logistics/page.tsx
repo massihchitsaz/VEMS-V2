@@ -1,2 +1,5 @@
-import Link from "next/link";
-export default function LogisticsReportPage() { return <main className="p-5 text-white md:p-8"><div className="mx-auto max-w-6xl"><p className="text-xs uppercase tracking-[0.22em] text-blue-400">Management Report</p><h1 className="mt-2 text-3xl font-bold">Logistics Operations Report</h1><div className="mt-6 grid gap-4 md:grid-cols-4">{[["Active Shipments","12"],["Delayed","2"],["Containers","18"],["Storage Exposure","AED 48.5K"]].map(([a,b])=><article key={a} className="rounded-2xl border border-slate-800 bg-[#0d1423] p-5"><p className="text-sm text-slate-400">{a}</p><p className="mt-3 text-2xl font-bold">{b}</p></article>)}</div><Link href="/reports" className="mt-8 inline-block rounded-xl bg-blue-600 px-5 py-3 font-semibold">Back to Reports</Link></div></main>; }
+import { LogisticsPerformanceReport } from "@/components/reports/LogisticsPerformanceReport";
+
+export default function LogisticsReportPage(){
+  return <LogisticsPerformanceReport/>;
+}
