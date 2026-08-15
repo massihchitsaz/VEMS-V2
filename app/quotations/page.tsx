@@ -1,5 +1,5 @@
-import { QuotationWorkspaceV2 } from "@/components/commercial/QuotationWorkspaceV2";
+import { QuotationWorkspaceV3 } from "@/components/commercial/QuotationWorkspaceV3";
 
 export default function Page() {
-  return <QuotationWorkspaceV2 />;
+  return <QuotationWorkspaceV3 />;
 }
