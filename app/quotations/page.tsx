@@ -1,6 +1,5 @@
-import { QuotationBuilder } from "@/components/commercial/QuotationBuilder";
+import { QuotationWorkspaceV2 } from "@/components/commercial/QuotationWorkspaceV2";
 
-// Production rebuild marker: quotation save flow fix forced 2026-08-15 16:40 GST
 export default function Page() {
-  return <QuotationBuilder />;
+  return <QuotationWorkspaceV2 />;
 }
