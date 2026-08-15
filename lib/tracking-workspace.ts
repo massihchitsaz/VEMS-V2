@@ -4,14 +4,15 @@ export type TrackingShipment = any;
 
 export async function getTrackingWorkspace(){
   const s=createClient();
-  const [shipments,units,events,milestones]=await Promise.all([
-    s.from("shipments").select("id,shipment_no,mode,status,priority,risk_level,exception_status,origin,destination,pol,pod,carrier,booking_no,container_no,bl_no,awb_no,vessel_name,voyage_no,flight_no,etd,eta,cargo_description,customs_status,last_tracking_at,customer:customers(company_name),owner:profiles(full_name)").order("created_at",{ascending:false}),
+  const [shipments,units,events,milestones,documents]=await Promise.all([
+    s.from("shipments").select("id,shipment_no,mode,status,priority,risk_level,exception_status,origin,destination,port_of_loading,port_of_discharge,place_of_receipt,place_of_delivery,carrier,booking_no,container_no,bl_no,awb_no,vessel_name,voyage_no,flight_no,etd,eta,actual_delivery_date,cargo_description,cargo_type,customs_status,customs_reference,last_tracking_at,is_dg,un_number,temperature_controlled,target_temperature_c,customer:customers(company_name),owner:profiles(full_name)").order("created_at",{ascending:false}),
     s.from("shipment_units").select("*").order("created_at",{ascending:true}),
     s.from("shipment_events").select("*").order("event_time",{ascending:false}),
     s.from("shipment_milestones").select("*").order("sequence_no",{ascending:true}),
+    s.from("documents").select("id,entity_id,document_type,title,file_name,status,created_at").eq("entity_type","shipment").order("created_at",{ascending:false}),
   ]);
-  for(const r of [shipments,units,events,milestones]) if(r.error) throw r.error;
-  return {shipments:shipments.data??[],units:units.data??[],events:events.data??[],milestones:milestones.data??[]};
+  for(const r of [shipments,units,events,milestones,documents]) if(r.error) throw r.error;
+  return {shipments:shipments.data??[],units:units.data??[],events:events.data??[],milestones:milestones.data??[],documents:documents.data??[]};
 }
 
 export async function addTrackingEvent(input:any){
