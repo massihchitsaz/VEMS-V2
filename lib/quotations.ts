@@ -3,22 +3,65 @@ import { createClient } from "@/lib/supabase/client";
 export type QuoteLine={id?:string;description:string;qty:number;unit:string;cost:number;sell:number};
 export type QuotePayload={id?:string;quotation_no:string|null;quotation_type:"trading"|"logistics";customer_id:string|null;supplier_id:string|null;opportunity_id:string|null;title:string;contact_person:string;currency:string;valid_until:string|null;incoterm:string;payment_terms:string;origin:string;destination:string;mode:string;commodity:string;hs_code:string;packing_details:string;gross_weight:string;volume_details:string;notes:string;status:string;lines:QuoteLine[]};
 
-export async function listQuotationWorkspace(){const s=createClient();const[q,c,sup,o]=await Promise.all([s.from("quotations").select("*,customers(company_name),suppliers(company_name),opportunities(opportunity_no,title),quotation_items(*)").order("created_at",{ascending:false}),s.from("customers").select("id,company_name,contact_person,status").order("company_name"),s.from("suppliers").select("id,company_name,status,kyc_status").order("company_name"),s.from("opportunities").select("id,opportunity_no,title,customer_id,stage").order("created_at",{ascending:false})]);for(const r of[q,c,sup,o])if(r.error)throw r.error;return{quotations:q.data??[],customers:c.data??[],suppliers:sup.data??[],opportunities:o.data??[]}}
-
-async function assertQuotationNumberAvailable(quotationNo:string,id?:string){if(!quotationNo)return;const s=createClient();let q=s.from("quotations").select("id").eq("quotation_no",quotationNo);if(id)q=q.neq("id",id);const{data,error}=await q.limit(1);if(error)throw error;if((data??[]).length)throw new Error(`Quotation number ${quotationNo} is already in use.`)}
-
-export async function saveQuotation(p:QuotePayload){
- const s=createClient();const{data:{user}}=await s.auth.getUser();if(!user)throw new Error("Authentication required");
- const quotationNo=(p.quotation_no??"").trim();
- if(p.status!=="draft"&&!quotationNo)throw new Error("Enter a quotation number before moving the quotation out of Draft status.");
- await assertQuotationNumberAvailable(quotationNo,p.id);
- const subtotal=p.lines.reduce((n,x)=>n+Number(x.qty||0)*Number(x.cost||0),0),total=p.lines.reduce((n,x)=>n+Number(x.qty||0)*Number(x.sell||0),0),margin=total?((total-subtotal)/total)*100:0;
- const baseRow={quotation_no:quotationNo||null,quotation_type:p.quotation_type,customer_id:p.customer_id||null,supplier_id:p.supplier_id||null,opportunity_id:p.opportunity_id||null,title:p.title.trim(),contact_person:p.contact_person||null,currency:p.currency,subtotal,margin_percent:margin,total_amount:total,status:p.status,valid_until:p.valid_until||null,route:[p.origin,p.destination].filter(Boolean).join(" → ")||null,incoterm:p.incoterm||null,payment_terms:p.payment_terms||null,origin:p.origin||null,destination:p.destination||null,mode:p.mode||null,commodity:p.commodity||null,hs_code:p.hs_code||null,packing_details:p.packing_details||null,gross_weight:p.gross_weight||null,volume_details:p.volume_details||null,notes:p.notes||null,owner_id:user.id,updated_at:new Date().toISOString()};
- let quote:any;
- if(p.id){const current=await s.from("quotations").select("revision").eq("id",p.id).single();if(current.error)throw current.error;const revision=Number(current.data.revision??1)+1;const u=await s.from("quotations").update({...baseRow,revision}).eq("id",p.id).select().single();if(u.error)throw u.error;quote=u.data;const del=await s.from("quotation_items").delete().eq("quotation_id",p.id);if(del.error)throw del.error;const version=await s.from("quotation_versions").insert({quotation_id:p.id,revision,snapshot:{...baseRow,lines:p.lines},created_by:user.id});if(version.error)throw version.error}
- else{const i=await s.from("quotations").insert({...baseRow,revision:1,created_by:user.id}).select().single();if(i.error)throw i.error;quote=i.data;const version=await s.from("quotation_versions").insert({quotation_id:quote.id,revision:1,snapshot:{...baseRow,lines:p.lines},created_by:user.id});if(version.error)throw version.error}
- const items=p.lines.filter(x=>x.description.trim()).map((x,i)=>({quotation_id:quote.id,line_no:i+1,description:x.description.trim(),quantity:Number(x.qty)||1,unit:x.unit||"Unit",unit_cost:Number(x.cost)||0,unit_sell:Number(x.sell)||0}));if(items.length){const ins=await s.from("quotation_items").insert(items);if(ins.error)throw ins.error}return quote
+export async function listQuotationWorkspace(){
+  const s=createClient();
+  const[q,c,sup,o]=await Promise.all([
+    s.from("quotations").select("*,customers(company_name),suppliers(company_name),opportunities(opportunity_no,title),quotation_items(*)").order("created_at",{ascending:false}),
+    s.from("customers").select("id,company_name,contact_person,status").order("company_name"),
+    s.from("suppliers").select("id,company_name,status,kyc_status").order("company_name"),
+    s.from("opportunities").select("id,opportunity_no,title,customer_id,stage").order("created_at",{ascending:false})
+  ]);
+  for(const r of[q,c,sup,o])if(r.error)throw r.error;
+  return{quotations:q.data??[],customers:c.data??[],suppliers:sup.data??[],opportunities:o.data??[]};
 }
 
-export async function updateQuotationStatus(id:string,status:string){const s=createClient();if(status!=="draft"){const{data,error}=await s.from("quotations").select("quotation_no").eq("id",id).single();if(error)throw error;if(!data?.quotation_no)throw new Error("Enter a quotation number before moving the quotation out of Draft status.")}const{error}=await s.from("quotations").update({status,updated_at:new Date().toISOString()}).eq("id",id);if(error)throw error}
-export async function deleteQuotation(id:string){const s=createClient();const{error}=await s.from("quotations").delete().eq("id",id);if(error)throw error}
+export async function saveQuotation(p:QuotePayload){
+  const s=createClient();
+  const{data:{user},error:authError}=await s.auth.getUser();
+  if(authError)throw authError;
+  if(!user)throw new Error("Authentication required");
+
+  const quotationNo=(p.quotation_no??"").trim();
+  if(p.status!=="draft"&&!quotationNo)throw new Error("Enter a quotation number before moving the quotation out of Draft status.");
+
+  const payload={
+    ...p,
+    quotation_no:quotationNo||null,
+    customer_id:p.customer_id||null,
+    supplier_id:p.supplier_id||null,
+    opportunity_id:p.opportunity_id||null,
+    title:(p.title||"").trim()||"Untitled quotation",
+    lines:(p.lines??[]).map(x=>({
+      description:(x.description||"").trim(),
+      qty:Number.isFinite(Number(x.qty))?Number(x.qty):1,
+      unit:(x.unit||"Unit").trim()||"Unit",
+      cost:Number.isFinite(Number(x.cost))?Number(x.cost):0,
+      sell:Number.isFinite(Number(x.sell))?Number(x.sell):0,
+    }))
+  };
+
+  const{data,error}=await s.rpc("save_quotation_v2",{p_payload:payload});
+  if(error){
+    if(error.code==="23505"||/already in use|duplicate/i.test(error.message||""))throw new Error(`Quotation number ${quotationNo} is already in use.`);
+    throw new Error(error.message||"Unable to save quotation");
+  }
+  if(!data?.id)throw new Error("Quotation save did not return a valid record.");
+  return data;
+}
+
+export async function updateQuotationStatus(id:string,status:string){
+  const s=createClient();
+  if(status!=="draft"){
+    const{data,error}=await s.from("quotations").select("quotation_no").eq("id",id).single();
+    if(error)throw error;
+    if(!data?.quotation_no)throw new Error("Enter a quotation number before moving the quotation out of Draft status.");
+  }
+  const{error}=await s.from("quotations").update({status,updated_at:new Date().toISOString()}).eq("id",id);
+  if(error)throw error;
+}
+
+export async function deleteQuotation(id:string){
+  const s=createClient();
+  const{error}=await s.from("quotations").delete().eq("id",id);
+  if(error)throw error;
+}
