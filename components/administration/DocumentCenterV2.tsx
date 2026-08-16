@@ -101,7 +101,7 @@ export function DocumentCenterV2(){
 
     {editing&&action!=="edit"&&<UploadModal data={data} editing={editing} setEditing={setEditing} file={file} setFile={setFile} saving={saving} onClose={()=>{setEditing(null);setFile(null)}} onSave={()=>void saveNew()}/>} 
 
-    {selected&&<DetailModal document={selected} activity={activity} approval={approvalByDoc.get(selected.id)} access={access} onClose={()=>{setSelected(null);setAction(null)}} onOpen={()=>void openDocument(selected.storage_path)} onDownload={()=>void downloadDocument(selected.storage_path,selected.file_name)} onAction={(a)=>{if(a==="edit")setEditing({...selected});startAction(a,selected)}}/>}
+    {selected&&<DetailModal document={selected} activity={activity} approval={approvalByDoc.get(selected.id)} access={access} onClose={()=>{setSelected(null);setAction(null)}} onOpen={()=>void openDocument(selected.storage_path)} onDownload={()=>void downloadDocument(selected.storage_path,selected.file_name)} onAction={(a:ActionType)=>{if(a==="edit")setEditing({...selected});startAction(a,selected)}}/>}
 
     {selected&&action&&<WorkflowModal action={action} document={selected} data={data} editing={editing} setEditing={setEditing} notes={actionNotes} setNotes={setActionNotes} approverId={approverId} setApproverId={setApproverId} versionFile={versionFile} setVersionFile={setVersionFile} saving={saving} onClose={()=>{setAction(null);setEditing(null);setActionNotes("");setVersionFile(null)}} onSubmit={()=>void runAction()}/>} 
   </main>;
