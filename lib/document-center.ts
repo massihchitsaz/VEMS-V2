@@ -119,3 +119,19 @@ export async function uploadNewVersion(parent:DocumentRecord,file:File,notes?:st
 export async function openDocument(path:string){const s=createClient();const{data,error}=await s.storage.from("vtc-documents").createSignedUrl(path,300);if(error)throw error;window.open(data.signedUrl,"_blank","noopener,noreferrer")}
 export async function downloadDocument(path:string,fileName:string){const s=createClient();const{data,error}=await s.storage.from("vtc-documents").download(path);if(error)throw error;const url=URL.createObjectURL(data);const a=document.createElement("a");a.href=url;a.download=fileName;a.click();URL.revokeObjectURL(url)}
 export async function getDocumentActivity(documentId:string){const s=createClient();const{data,error}=await s.from("document_activity").select("*,actor:actor_id(full_name)").eq("document_id",documentId).order("created_at",{ascending:false});if(error)throw error;return data??[]}
+
+// Compatibility exports for legacy components that still compile with the application.
+// Status changes are intentionally rejected here so old UI cannot bypass controlled workflow.
+export async function updateDocument(id:string,patch:any,_activity?:string){
+  if(Object.prototype.hasOwnProperty.call(patch,"status"))throw new Error("Direct document status changes are disabled. Use the controlled review workflow.");
+  return updateDocumentMetadata(id,patch);
+}
+
+export async function deleteDocument(doc:DocumentRecord){
+  const access=await getDocumentAccess();
+  if(!access.canApprove)throw new Error("Only authorized document controllers can delete records.");
+  if(!["draft","rejected","cancelled"].includes(doc.status||"draft"))throw new Error("Only Draft, Rejected or Cancelled documents can be deleted.");
+  const s=createClient();
+  const{error}=await s.from("documents").delete().eq("id",doc.id);if(error)throw error;
+  const removed=await s.storage.from("vtc-documents").remove([doc.storage_path]);if(removed.error)throw removed.error;
+}
