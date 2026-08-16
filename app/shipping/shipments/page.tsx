@@ -1,9 +1,9 @@
 import { ShipmentExecutionGate } from "@/components/shipping/ShipmentExecutionGate";
-import { ShipmentsWorkspace } from "@/components/shipping/ShipmentsWorkspace";
+import { ControlledShipmentsWorkspace } from "@/components/shipping/ControlledShipmentsWorkspace";
 
 export default function ShipmentsPage(){
   return <>
     <ShipmentExecutionGate/>
-    <ShipmentsWorkspace/>
+    <ControlledShipmentsWorkspace/>
   </>;
 }
