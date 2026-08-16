@@ -3,23 +3,37 @@
 import { useEffect, useRef } from "react";
 import { ShipmentsWorkspace } from "@/components/shipping/ShipmentsWorkspace";
 
+function markControlled(select: HTMLSelectElement) {
+  select.disabled = true;
+  select.tabIndex = -1;
+  select.setAttribute("aria-disabled", "true");
+  select.setAttribute("aria-label", "Shipment status managed by Shipment Execution Gate");
+  select.title = "Status changes are managed only through Shipment Execution Gate";
+  select.dataset.controlledStatus = "true";
+}
+
 function hardenStatusControls(root: HTMLElement) {
-  const registerSelects = root.querySelectorAll<HTMLSelectElement>("table tbody tr td:nth-child(10) select");
-  registerSelects.forEach((select) => {
-    select.disabled = true;
-    select.tabIndex = -1;
-    select.setAttribute("aria-label", "Shipment status managed by Shipment Execution Gate");
-    select.dataset.controlledStatus = "true";
+  root.querySelectorAll<HTMLTableElement>("table").forEach((table) => {
+    const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th"));
+    const statusIndex = headers.findIndex((header) => header.textContent?.trim().toLowerCase() === "status");
+    if (statusIndex < 0) return;
+    table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
+      const cell = row.cells.item(statusIndex);
+      const select = cell?.querySelector<HTMLSelectElement>("select");
+      if (select) markControlled(select);
+    });
   });
 
-  const modalStatusSelects = root.querySelectorAll<HTMLSelectElement>(
-    ".fixed .space-y-5 > section:nth-child(2) > div > label:nth-child(2) select"
-  );
-  modalStatusSelects.forEach((select) => {
-    select.disabled = true;
-    select.tabIndex = -1;
-    select.setAttribute("aria-label", "Shipment status managed by Shipment Execution Gate");
-    select.dataset.controlledStatus = "true";
+  root.querySelectorAll<HTMLLabelElement>("label").forEach((label) => {
+    const select = label.querySelector<HTMLSelectElement>("select");
+    if (!select) return;
+    const labelText = Array.from(label.childNodes)
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent?.trim() || "")
+      .join(" ")
+      .trim()
+      .toLowerCase();
+    if (labelText === "status") markControlled(select);
   });
 }
 
@@ -45,7 +59,7 @@ export function ControlledShipmentsWorkspace() {
           <div>
             <p className="font-semibold">Controlled shipment lifecycle</p>
             <p className="mt-1 text-xs text-blue-200/75">
-              Shipment status is read-only in the register and edit form. All lifecycle changes, cancellations and manager overrides are executed only through the Shipment Execution Gate above.
+              Shipment status is read-only in the register and edit form. Lifecycle changes, cancellations and manager overrides are executed only through the Shipment Execution Gate above.
             </p>
           </div>
           <span className="mt-2 inline-flex w-fit rounded-full border border-blue-800 bg-blue-950/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-300 md:mt-0">
