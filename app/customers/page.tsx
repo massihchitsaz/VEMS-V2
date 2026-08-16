@@ -1,5 +1,5 @@
-import { CustomerWorkspace } from "@/components/commercial/CustomerWorkspace";
+import { CustomerControlCenter } from "@/components/commercial/CustomerControlCenter";
 
 export default function CustomersPage(){
-  return <CustomerWorkspace/>;
+  return <CustomerControlCenter/>;
 }
