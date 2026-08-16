@@ -1,2 +1,5 @@
-import { InventoryWorkspace } from "@/components/inventory/InventoryWorkspace";
-export default function InventoryPage(){return <InventoryWorkspace/>}
+import { InventoryCommandCenter } from "@/components/inventory/InventoryCommandCenter";
+
+export default function InventoryPage(){
+  return <InventoryCommandCenter/>;
+}
