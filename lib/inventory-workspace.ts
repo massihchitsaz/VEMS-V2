@@ -24,7 +24,29 @@ function clean(v:any){const out={...v};delete out.id;for(const k of Object.keys(
 export async function saveWarehouse(v:any){const s=sb();const payload={...clean(v),updated_at:new Date().toISOString()};const q=v.id?s.from('warehouses').update(payload).eq('id',v.id):s.from('warehouses').insert(payload);const {error}=await q;if(error)throw error}
 export async function saveLocation(v:any){const s=sb();const payload=clean(v);const q=v.id?s.from('warehouse_locations').update(payload).eq('id',v.id):s.from('warehouse_locations').insert(payload);const {error}=await q;if(error)throw error}
 export async function saveItem(v:any){const s=sb();const payload={...clean(v),min_stock:Number(v.min_stock||0),reorder_point:Number(v.reorder_point||0),updated_at:new Date().toISOString()};const q=v.id?s.from('inventory_items').update(payload).eq('id',v.id):s.from('inventory_items').insert(payload);const {error}=await q;if(error)throw error}
-export async function saveLot(v:any){const s=sb();const payload={...clean(v),qty_on_hand:Number(v.qty_on_hand||0),qty_reserved:Number(v.qty_reserved||0),gross_weight_kg:v.gross_weight_kg?Number(v.gross_weight_kg):null,net_weight_kg:v.net_weight_kg?Number(v.net_weight_kg):null,volume_cbm:v.volume_cbm?Number(v.volume_cbm):null,updated_at:new Date().toISOString()};const q=v.id?s.from('inventory_lots').update(payload).eq('id',v.id):s.from('inventory_lots').insert(payload);const {error}=await q;if(error)throw error}
+
+export async function saveLot(v:any){
+ const s=sb();
+ if(!v.id){
+  const {data,error}=await s.rpc('inventory_receive_stock_v3',{p_payload:clean(v)});
+  if(error)throw error;
+  return data;
+ }
+ const {data:current,error:readError}=await s.from('inventory_lots').select('qty_on_hand,qty_reserved').eq('id',v.id).single();
+ if(readError)throw readError;
+ if(Number(v.qty_on_hand||0)!==Number(current.qty_on_hand||0)||Number(v.qty_reserved||0)!==Number(current.qty_reserved||0)){
+  throw new Error('Stock balances cannot be edited directly. Use Stock Movement or Reservation workflows.');
+ }
+ const payload:any=clean(v);
+ delete payload.qty_on_hand;
+ delete payload.qty_reserved;
+ payload.gross_weight_kg=v.gross_weight_kg?Number(v.gross_weight_kg):null;
+ payload.net_weight_kg=v.net_weight_kg?Number(v.net_weight_kg):null;
+ payload.volume_cbm=v.volume_cbm?Number(v.volume_cbm):null;
+ payload.updated_at=new Date().toISOString();
+ const {error}=await s.from('inventory_lots').update(payload).eq('id',v.id);
+ if(error)throw error;
+}
 
 export async function addMovement(v:any){
  const s=sb();
