@@ -4,20 +4,21 @@ const sb = () => createClient();
 
 export async function getInventoryWorkspace() {
   const s = sb();
-  const [w, l, i, b, m, r, c, p, sh, d, sup] = await Promise.all([
+  const [w, l, i, b, m, r, e, c, p, sh, d, sup] = await Promise.all([
     s.from("warehouses").select("*").order("name"),
     s.from("warehouse_locations").select("*,warehouse:warehouses(name)").order("code"),
     s.from("inventory_items").select("*,customer:customers(company_name),supplier:suppliers(company_name)").order("item_name"),
-    s.from("inventory_lots").select("*,item:inventory_items(item_name,sku,base_unit,reorder_point,min_stock,expiry_controlled,temperature_controlled),warehouse:warehouses(name,code),location:warehouse_locations(code,zone,aisle,rack,bin),shipment:shipments(shipment_no)").order("created_at", { ascending: false }),
-    s.from("inventory_movements").select("*,lot:inventory_lots(lot_no,item:inventory_items(item_name,sku)),from_location:warehouse_locations!inventory_movements_from_location_id_fkey(code),to_location:warehouse_locations!inventory_movements_to_location_id_fkey(code),performed_by_profile:profiles!inventory_movements_performed_by_fkey(full_name)").order("created_at", { ascending: false }).limit(250),
-    s.from("inventory_reservations").select("*,lot:inventory_lots(lot_no,item:inventory_items(item_name,sku)),customer:customers(company_name),shipment:shipments(shipment_no),deal:deals(deal_no)").order("created_at", { ascending: false }),
+    s.from("inventory_lots").select("*,item:inventory_items(item_name,sku,base_unit,reorder_point,min_stock,expiry_controlled,temperature_controlled,serial_controlled,lot_controlled),warehouse:warehouses(name,code),location:warehouse_locations(code,zone,aisle,rack,bin),shipment:shipments(shipment_no)").order("created_at", { ascending: false }),
+    s.from("inventory_movements").select("*,lot:inventory_lots(lot_no,batch_no,item:inventory_items(item_name,sku)),destination_lot:inventory_lots!inventory_movements_destination_lot_id_fkey(lot_no,batch_no),from_location:warehouse_locations!inventory_movements_from_location_id_fkey(code,warehouse:warehouses(name,code)),to_location:warehouse_locations!inventory_movements_to_location_id_fkey(code,warehouse:warehouses(name,code)),performed_by_profile:profiles!inventory_movements_performed_by_fkey(full_name)").order("created_at", { ascending: false }).limit(500),
+    s.from("inventory_reservations").select("*,lot:inventory_lots(lot_no,batch_no,warehouse:warehouses(name,code),location:warehouse_locations(code),item:inventory_items(item_name,sku)),customer:customers(company_name),shipment:shipments(shipment_no),deal:deals(deal_no),reserved_by_profile:profiles!inventory_reservations_reserved_by_fkey(full_name)").order("created_at", { ascending: false }),
+    s.from("inventory_events").select("*,lot:inventory_lots(lot_no,batch_no,item:inventory_items(item_name,sku)),performed_by_profile:profiles!inventory_events_performed_by_fkey(full_name)").order("created_at", { ascending: false }).limit(500),
     s.from("customers").select("id,company_name").eq("status", "active").order("company_name"),
-    s.from("profiles").select("id,full_name").eq("active", true).order("full_name"),
+    s.from("profiles").select("id,full_name,role").eq("active", true).order("full_name"),
     s.from("shipments").select("id,shipment_no").order("created_at", { ascending: false }),
     s.from("deals").select("id,deal_no").order("created_at", { ascending: false }),
     s.from("suppliers").select("id,company_name").order("company_name"),
   ]);
-  for (const x of [w, l, i, b, m, r, c, p, sh, d, sup]) if (x.error) throw x.error;
+  for (const x of [w, l, i, b, m, r, e, c, p, sh, d, sup]) if (x.error) throw x.error;
   return {
     warehouses: w.data ?? [],
     locations: l.data ?? [],
@@ -25,6 +26,7 @@ export async function getInventoryWorkspace() {
     lots: b.data ?? [],
     movements: m.data ?? [],
     reservations: r.data ?? [],
+    events: e.data ?? [],
     customers: c.data ?? [],
     profiles: p.data ?? [],
     shipments: sh.data ?? [],
@@ -48,7 +50,7 @@ function pick(v: any, fields: string[]) {
 const warehouseFields = ["code", "name", "warehouse_type", "country", "city", "address", "operator_name", "contact_person", "phone", "temperature_controlled", "status", "notes"];
 const locationFields = ["warehouse_id", "code", "zone", "aisle", "rack", "bin", "location_type", "capacity_qty", "capacity_unit", "temperature_min_c", "temperature_max_c", "status", "notes"];
 const itemFields = ["sku", "item_name", "description", "category", "hs_code", "base_unit", "lot_controlled", "serial_controlled", "expiry_controlled", "temperature_controlled", "min_stock", "reorder_point", "customer_id", "supplier_id", "status", "notes"];
-const lotFields = ["item_id", "warehouse_id", "location_id", "shipment_id", "lot_no", "batch_no", "serial_no", "container_no", "package_ref", "production_date", "expiry_date", "received_date", "condition_status", "stock_status", "unit", "gross_weight_kg", "net_weight_kg", "volume_cbm", "owner_type", "owner_name", "customs_status", "notes"];
+const lotFields = ["item_id", "warehouse_id", "location_id", "shipment_id", "lot_no", "batch_no", "serial_no", "container_no", "package_ref", "production_date", "expiry_date", "received_date", "condition_status", "unit", "gross_weight_kg", "net_weight_kg", "volume_cbm", "owner_type", "owner_name", "customs_status", "notes"];
 const movementFields = ["movement_type", "lot_id", "from_location_id", "to_location_id", "quantity", "unit", "reference_type", "reference_id", "reference_no", "reason", "performed_by"];
 const reservationFields = ["lot_id", "quantity", "unit", "deal_id", "shipment_id", "customer_id", "reserved_by", "expires_at", "notes"];
 
@@ -88,7 +90,7 @@ export async function saveLot(v: any) {
   const s = sb();
   if (!v.id) {
     const payload = {
-      ...pick(v, [...lotFields, "qty_on_hand", "qty_reserved"]),
+      ...pick(v, [...lotFields, "stock_status", "qty_on_hand", "qty_reserved"]),
       qty_on_hand: Number(v.qty_on_hand || 0),
       qty_reserved: Number(v.qty_reserved || 0),
       gross_weight_kg: v.gross_weight_kg ? Number(v.gross_weight_kg) : null,
@@ -100,10 +102,13 @@ export async function saveLot(v: any) {
     return data;
   }
 
-  const { data: current, error: readError } = await s.from("inventory_lots").select("qty_on_hand,qty_reserved").eq("id", v.id).single();
+  const { data: current, error: readError } = await s.from("inventory_lots").select("qty_on_hand,qty_reserved,stock_status").eq("id", v.id).single();
   if (readError) throw readError;
   if (Number(v.qty_on_hand || 0) !== Number(current.qty_on_hand || 0) || Number(v.qty_reserved || 0) !== Number(current.qty_reserved || 0)) {
     throw new Error("Stock balances cannot be edited directly. Use Stock Movement or Reservation workflows.");
+  }
+  if (v.stock_status && v.stock_status !== current.stock_status) {
+    throw new Error("Stock status cannot be edited directly. Use Hold, Release, Quarantine or other controlled workflows.");
   }
 
   const payload: Record<string, any> = pick(v, lotFields);
@@ -136,6 +141,29 @@ export async function addReservation(v: any) {
 export async function releaseReservation(id: string) {
   const s = sb();
   const { data, error } = await s.rpc("inventory_release_reservation_v2", { p_reservation_id: id });
+  if (error) throw error;
+  return data;
+}
+
+export async function fulfillReservation(id: string, referenceNo?: string, reason?: string) {
+  const s = sb();
+  const { data, error } = await s.rpc("inventory_fulfill_reservation_v1", {
+    p_reservation_id: id,
+    p_reference_no: referenceNo || null,
+    p_reason: reason || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setLotHold(lotId: string, hold: boolean, reason: string, referenceNo?: string) {
+  const s = sb();
+  const { data, error } = await s.rpc("inventory_set_lot_hold_v1", {
+    p_lot_id: lotId,
+    p_hold: hold,
+    p_reason: reason,
+    p_reference_no: referenceNo || null,
+  });
   if (error) throw error;
   return data;
 }
