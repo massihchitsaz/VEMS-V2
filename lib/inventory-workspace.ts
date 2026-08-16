@@ -27,27 +27,22 @@ export async function saveItem(v:any){const s=sb();const payload={...clean(v),mi
 export async function saveLot(v:any){const s=sb();const payload={...clean(v),qty_on_hand:Number(v.qty_on_hand||0),qty_reserved:Number(v.qty_reserved||0),gross_weight_kg:v.gross_weight_kg?Number(v.gross_weight_kg):null,net_weight_kg:v.net_weight_kg?Number(v.net_weight_kg):null,volume_cbm:v.volume_cbm?Number(v.volume_cbm):null,updated_at:new Date().toISOString()};const q=v.id?s.from('inventory_lots').update(payload).eq('id',v.id):s.from('inventory_lots').insert(payload);const {error}=await q;if(error)throw error}
 
 export async function addMovement(v:any){
- const s=sb();const movement_no=`MOV-${Date.now()}`;
- const {data:lot,error:e1}=await s.from('inventory_lots').select('*').eq('id',v.lot_id).single();if(e1)throw e1;
- let on=Number(lot.qty_on_hand||0),loc=lot.location_id,status=lot.stock_status;const q=Number(v.quantity);
- if(!q||q<=0)throw new Error('Movement quantity must be greater than zero.');
- const available=on-Number(lot.qty_reserved||0);
- if(['issue','damage'].includes(v.movement_type)){if(q>available)throw new Error('Insufficient available stock.');on-=q;if(v.movement_type==='damage')status='damaged'}
- else if(v.movement_type==='receipt')on+=q;
- else if(v.movement_type==='adjustment'){on=q}
- else if(v.movement_type==='transfer')loc=v.to_location_id||loc;
- else if(v.movement_type==='quarantine')status='quarantine';
- else if(v.movement_type==='repack'){}
- const payload={...clean(v),quantity:q,movement_no};
- const {error}=await s.from('inventory_movements').insert(payload);if(error)throw error;
- const u=await s.from('inventory_lots').update({qty_on_hand:on,location_id:loc,stock_status:status,updated_at:new Date().toISOString()}).eq('id',v.lot_id);if(u.error)throw u.error
+ const s=sb();
+ const {data,error}=await s.rpc('inventory_add_movement_v2',{p_payload:clean(v)});
+ if(error)throw error;
+ return data;
 }
 
 export async function addReservation(v:any){
- const s=sb();const {data:lot,error:e}=await s.from('inventory_lots').select('*').eq('id',v.lot_id).single();if(e)throw e;
- const q=Number(v.quantity),available=Number(lot.qty_on_hand||0)-Number(lot.qty_reserved||0);if(!q||q<=0)throw new Error('Reservation quantity must be greater than zero.');if(q>available)throw new Error('Reservation exceeds available stock.');
- const reservation_no=`RES-${Date.now()}`;const {error}=await s.from('inventory_reservations').insert({...clean(v),quantity:q,reservation_no});if(error)throw error;
- const u=await s.from('inventory_lots').update({qty_reserved:Number(lot.qty_reserved||0)+q,stock_status:'reserved',updated_at:new Date().toISOString()}).eq('id',v.lot_id);if(u.error)throw u.error
+ const s=sb();
+ const {data,error}=await s.rpc('inventory_add_reservation_v2',{p_payload:clean(v)});
+ if(error)throw error;
+ return data;
 }
 
-export async function releaseReservation(id:string){const s=sb();const {data:r,error}=await s.from('inventory_reservations').select('*').eq('id',id).single();if(error)throw error;if(r.status!=='active')return;const {data:lot,error:e}=await s.from('inventory_lots').select('*').eq('id',r.lot_id).single();if(e)throw e;const next=Math.max(0,Number(lot.qty_reserved||0)-Number(r.quantity||0));const a=await s.from('inventory_reservations').update({status:'released',updated_at:new Date().toISOString()}).eq('id',id);if(a.error)throw a.error;const b=await s.from('inventory_lots').update({qty_reserved:next,stock_status:next>0?'reserved':'available',updated_at:new Date().toISOString()}).eq('id',r.lot_id);if(b.error)throw b.error}
+export async function releaseReservation(id:string){
+ const s=sb();
+ const {data,error}=await s.rpc('inventory_release_reservation_v2',{p_reservation_id:id});
+ if(error)throw error;
+ return data;
+}
