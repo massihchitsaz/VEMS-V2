@@ -1,5 +1,5 @@
-import { DocumentCenterV2 } from "@/components/administration/DocumentCenterV2";
+import {DocumentControlWorkspace} from "@/components/administration/DocumentControlWorkspace";
 
-export default function DocumentsPage() {
-  return <DocumentCenterV2 />;
+export default function DocumentsPage(){
+  return <DocumentControlWorkspace/>;
 }
