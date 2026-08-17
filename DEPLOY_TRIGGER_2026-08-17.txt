@@ -1,1 +1,1 @@
-Trigger Cloudflare redeploy for audited VEMS-V2 main after Inventory, Documents, Shipping, Tracking, and Treasury production passes. Target Worker: vems-v2.massih-chitsaz.workers.dev
+Trigger Cloudflare redeploy for audited VEMS-V2 main after Customer Control Center compatibility and delete hard-lock. Target Worker: vems-v2.massih-chitsaz.workers.dev. Source commit: 87da21450ab8cdc077ac77faeb7a9a481ce76f01.
