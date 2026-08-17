@@ -15,17 +15,21 @@ export async function listQuotationWorkspace(){
   return{quotations:q.data??[],customers:c.data??[],suppliers:sup.data??[],opportunities:o.data??[]};
 }
 
+function quoteError(error:any,quotationNo:string){
+  if(error?.code==="23505"||/already in use|duplicate/i.test(error?.message||""))return new Error(`Quotation number ${quotationNo} is already in use.`);
+  if(/jwt|session|authentication|not authenticated/i.test(`${error?.message||""} ${error?.details||""}`))return new Error("Your session is no longer valid. Please sign in again and retry the quotation save.");
+  const detail=[error?.message,error?.details,error?.hint].filter(Boolean).join(" · ");
+  return new Error(detail||"Unable to save quotation.");
+}
+
 export async function saveQuotation(p:QuotePayload){
   const s=createClient();
-  const{data:{user},error:authError}=await s.auth.getUser();
-  if(authError)throw authError;
-  if(!user)throw new Error("Authentication required");
-
   const quotationNo=(p.quotation_no??"").trim();
   if(p.status!=="draft"&&!quotationNo)throw new Error("Enter a quotation number before moving the quotation out of Draft status.");
 
   const payload={
     ...p,
+    id:p.id||"",
     quotation_no:quotationNo||null,
     customer_id:p.customer_id||null,
     supplier_id:p.supplier_id||null,
@@ -40,12 +44,9 @@ export async function saveQuotation(p:QuotePayload){
     }))
   };
 
-  const{data,error}=await s.rpc("save_quotation_v2",{p_payload:payload});
-  if(error){
-    if(error.code==="23505"||/already in use|duplicate/i.test(error.message||""))throw new Error(`Quotation number ${quotationNo} is already in use.`);
-    throw new Error(error.message||"Unable to save quotation");
-  }
-  if(!data?.id)throw new Error("Quotation save did not return a valid record.");
+  const{data,error}=await s.rpc("save_quotation_v3",{p_payload:payload});
+  if(error)throw quoteError(error,quotationNo);
+  if(!data?.id)throw new Error("Quotation save completed without returning a valid record. Please refresh before retrying.");
   return data;
 }
 
