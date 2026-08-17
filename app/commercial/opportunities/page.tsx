@@ -1,2 +1,2 @@
-import { OpportunitiesPage } from "@/components/commercial/OpportunitiesPage";
-export default function Page(){return <OpportunitiesPage/>}
+import { OpportunitiesFlowPageV2 } from "@/components/commercial/OpportunitiesFlowPageV2";
+export default function Page(){return <OpportunitiesFlowPageV2/>}

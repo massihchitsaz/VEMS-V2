@@ -1,2 +1,2 @@
-import { CommercialDashboard } from "@/components/commercial/CommercialDashboard";
-export default function CommercialPage(){return <CommercialDashboard/>}
+import { CommercialFlowControlCenter } from "@/components/commercial/CommercialFlowControlCenter";
+export default function CommercialPage(){return <CommercialFlowControlCenter/>}
