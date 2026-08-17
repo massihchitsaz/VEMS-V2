@@ -29,5 +29,5 @@ export async function saveQuotation(p:QuotePayload){
   if(error)throw quoteError(error,quotationNo); if(!data?.id)throw new Error("Quotation save completed without returning a valid record."); return data;
 }
 
-export async function updateQuotationStatus(){throw new Error("Quotation status is controlled by Commercial Flow. Use Submit / Approve / Reject actions.")}
+export async function updateQuotationStatus(_id?:string,_status?:string){throw new Error("Quotation status is controlled by Commercial Flow. Use Submit / Approve / Reject actions.")}
 export async function deleteQuotation(id:string){const s=createClient();const{error}=await s.from("quotations").delete().eq("id",id);if(error)throw error}
