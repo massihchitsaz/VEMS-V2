@@ -1,2 +1,2 @@
-import { ReceivablesWorkspace } from "@/components/finance/ReceivablesWorkspace";
-export default function ReceivablesPage(){ return <ReceivablesWorkspace/>; }
+import { ReceivablesControlCenterV2 } from "@/components/finance/ReceivablesControlCenterV2";
+export default function ReceivablesPage(){ return <ReceivablesControlCenterV2/>; }
