@@ -1,1 +1,1 @@
-Trigger Cloudflare redeploy for audited VEMS-V2 main after Commercial Deal Control Center integration. Target Worker: vems-v2.massih-chitsaz.workers.dev. Source commit: 33010bba039be900b793ef502c46f5bc6dd7e71c.
+Trigger Cloudflare redeploy for audited VEMS-V2 main after Commercial Deal Control Center integration. Target Worker: vems-v2.massih-chitsaz.workers.dev. Source commit: d97a851d36276d20e289f1d75e7be3e20cf003e1.
