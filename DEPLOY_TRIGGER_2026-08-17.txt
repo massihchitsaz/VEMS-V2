@@ -1,1 +1,1 @@
-Trigger Cloudflare redeploy for audited VEMS-V2 main after quotation v3, global security cleanup, RLS hardening and performance cleanup through v38. Target Worker: vems-v2.massih-chitsaz.workers.dev. Source commit: 6957e76bfb5e697fbc543a3c3cc049f297f1728c.
+Final Cloudflare audit deployment for VEMS-V2 after quotation v3, security cleanup, Treasury/Inventory/Shipping RLS hardening, and performance/index cleanup through v38. Target Worker: vems-v2.massih-chitsaz.workers.dev. Verified Supabase migration head: secondary_index_and_rls_plan_v38.
