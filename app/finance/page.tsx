@@ -1,2 +1,2 @@
-import { FinanceCommandCenter } from "@/components/finance/FinanceCommandCenter";
-export default function FinancePage(){ return <FinanceCommandCenter/>; }
+import { FinanceControlCenterV2 } from "@/components/finance/FinanceControlCenterV2";
+export default function FinancePage(){return <FinanceControlCenterV2/>}
