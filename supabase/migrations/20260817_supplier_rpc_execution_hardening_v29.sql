@@ -1,0 +1,16 @@
+revoke all on function public.supplier_set_status_v1(uuid,text,text) from public;
+revoke all on function public.supplier_set_kyc_v1(uuid,text,text) from public;
+revoke all on function public.supplier_set_kyc_v2(uuid,text,date,text) from public;
+revoke all on function public.supplier_set_terms_v1(uuid,text,text,text) from public;
+revoke all on function public.supplier_assign_manager_v1(uuid,uuid,text) from public;
+revoke all on function public.supplier_set_rating_v1(uuid,numeric,text) from public;
+revoke all on function public.supplier_delete_v1(uuid,text) from public;
+revoke all on function public.supplier_account_snapshot_v1(uuid) from public;
+grant execute on function public.supplier_set_status_v1(uuid,text,text) to authenticated,service_role;
+grant execute on function public.supplier_set_kyc_v1(uuid,text,text) to authenticated,service_role;
+grant execute on function public.supplier_set_kyc_v2(uuid,text,date,text) to authenticated,service_role;
+grant execute on function public.supplier_set_terms_v1(uuid,text,text,text) to authenticated,service_role;
+grant execute on function public.supplier_assign_manager_v1(uuid,uuid,text) to authenticated,service_role;
+grant execute on function public.supplier_set_rating_v1(uuid,numeric,text) to authenticated,service_role;
+grant execute on function public.supplier_delete_v1(uuid,text) to authenticated,service_role;
+grant execute on function public.supplier_account_snapshot_v1(uuid) to authenticated,service_role;

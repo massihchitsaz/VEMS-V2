@@ -1,2 +1,2 @@
-import { SuppliersDirectory } from "@/components/commercial/SuppliersDirectory";
-export default function Page(){return <SuppliersDirectory/>}
+import {SupplierControlCenter} from "@/components/commercial/SupplierControlCenter";
+export default function Page(){return <SupplierControlCenter/>}
