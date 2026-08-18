@@ -1,0 +1,4 @@
+Cloudflare deploy trigger for Payments Control Center V2
+Target worker: vems-v2
+Production URL: https://vems-v2.massih-chitsaz.workers.dev
+Migration: payments_control_center_v52
