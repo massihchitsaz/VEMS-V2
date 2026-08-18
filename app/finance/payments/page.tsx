@@ -1,2 +1,2 @@
-import { PaymentWorkspace } from "@/components/finance/PaymentWorkspace";
-export default function PaymentsPage(){ return <PaymentWorkspace/>; }
+import { PaymentsControlCenterV2 } from "@/components/finance/PaymentsControlCenterV2";
+export default function PaymentsPage(){ return <PaymentsControlCenterV2/>; }
