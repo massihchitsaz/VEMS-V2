@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         id: install
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Verify Cloudflare authentication
         id: auth
