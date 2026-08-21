@@ -8,7 +8,7 @@
     "audit:actions:strict": "node scripts/audit-actions.mjs --strict",
     "audit:ui-writes": "node scripts/audit-ui-writes.mjs",
     "audit:ui-writes:strict": "node scripts/audit-ui-writes.mjs --strict",
-    "build": "npm run audit:actions:strict && npm run audit:ui-writes && next build",
+    "build": "npm run audit:actions:strict && npm run audit:ui-writes:strict && next build",
     "start": "next start",
     "lint": "eslint",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
