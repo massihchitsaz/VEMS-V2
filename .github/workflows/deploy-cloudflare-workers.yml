@@ -13,7 +13,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ !contains(github.event.head_commit.message || '', '[skip cf-deploy]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -32,31 +31,51 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        id: install
         run: npm ci
 
       - name: Verify Cloudflare authentication
+        id: auth
         run: npx wrangler whoami
 
       - name: Production quality gates
+        id: quality
         run: npm run build
 
       - name: Build OpenNext for Cloudflare
+        id: cfbuild
         run: npx opennextjs-cloudflare build
 
       - name: Deploy canonical VEMS-V2 Worker
+        id: cfdeploy
         run: npx opennextjs-cloudflare deploy
 
-      - name: Record successful deployment
+      - name: Record deployment result
+        if: always()
         shell: bash
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          AUTH_OUTCOME: ${{ steps.auth.outcome }}
+          QUALITY_OUTCOME: ${{ steps.quality.outcome }}
+          CFBUILD_OUTCOME: ${{ steps.cfbuild.outcome }}
+          CFDEPLOY_OUTCOME: ${{ steps.cfdeploy.outcome }}
         run: |
           mkdir -p deployments
           python - <<'PY'
           import json, os, datetime
+          stages = {
+            "install": os.environ.get("INSTALL_OUTCOME", "unknown"),
+            "cloudflare_auth": os.environ.get("AUTH_OUTCOME", "unknown"),
+            "quality_gates": os.environ.get("QUALITY_OUTCOME", "unknown"),
+            "cloudflare_build": os.environ.get("CFBUILD_OUTCOME", "unknown"),
+            "cloudflare_deploy": os.environ.get("CFDEPLOY_OUTCOME", "unknown")
+          }
           payload = {
-            "status": "success",
+            "status": "success" if stages["cloudflare_deploy"] == "success" else "failed",
             "target": os.environ["TARGET_URL"],
             "source_commit": os.environ["GITHUB_SHA"],
-            "deployed_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "stages": stages,
             "workflow": "deploy-cloudflare-workers.yml"
           }
           with open("deployments/cloudflare-production.json", "w", encoding="utf-8") as f:
@@ -66,5 +85,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deployments/cloudflare-production.json
-          git diff --cached --quiet || git commit -m "Record Cloudflare production deploy [skip cf-deploy]"
+          git diff --cached --quiet || git commit -m "Record Cloudflare deployment result [skip cf-deploy]"
           git push
