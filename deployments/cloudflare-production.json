@@ -1,0 +1,14 @@
+{
+  "status": "failed",
+  "target": "https://vems-v2.massih-chitsaz.workers.dev",
+  "source_commit": "7c236aa889ea7c9fadadd83cbaecd4bcb267cba3",
+  "checked_at_utc": "2026-08-21T22:02:05.156299+00:00",
+  "stages": {
+    "install": "skipped",
+    "cloudflare_auth": "skipped",
+    "quality_gates": "skipped",
+    "cloudflare_build": "skipped",
+    "cloudflare_deploy": "skipped"
+  },
+  "workflow": "deploy-cloudflare-workers.yml"
+}
