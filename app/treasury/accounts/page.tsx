@@ -1,5 +1,5 @@
-import { TreasuryAccounts } from "@/components/treasury/TreasuryAccounts";
+import { redirect } from "next/navigation";
 
 export default function Page(){
-  return <TreasuryAccounts/>;
+  redirect("/banking");
 }
