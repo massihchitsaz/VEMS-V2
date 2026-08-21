@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "audit:actions": "node scripts/audit-actions.mjs",
+    "audit:actions:strict": "node scripts/audit-actions.mjs --strict",
+    "build": "npm run audit:actions && next build",
     "start": "next start",
     "lint": "eslint",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
