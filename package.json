@@ -6,7 +6,7 @@
     "dev": "next dev",
     "audit:actions": "node scripts/audit-actions.mjs",
     "audit:actions:strict": "node scripts/audit-actions.mjs --strict",
-    "build": "npm run audit:actions && next build",
+    "build": "npm run audit:actions:strict && next build",
     "start": "next start",
     "lint": "eslint",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
