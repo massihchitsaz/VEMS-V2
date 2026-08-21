@@ -1,10 +1,11 @@
 {
   "status": "failed",
   "target": "https://vems-v2.massih-chitsaz.workers.dev",
-  "source_commit": "7c236aa889ea7c9fadadd83cbaecd4bcb267cba3",
-  "checked_at_utc": "2026-08-21T22:02:05.156299+00:00",
+  "source_commit": "668d2f309b9cc7b2bb58a81de6464a4e45412f94",
+  "checked_at_utc": "2026-08-21T22:03:07.675469+00:00",
   "stages": {
-    "install": "skipped",
+    "runtime": "success",
+    "install": "failure",
     "cloudflare_auth": "skipped",
     "quality_gates": "skipped",
     "cloudflare_build": "skipped",
