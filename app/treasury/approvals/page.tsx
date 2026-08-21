@@ -1,5 +1,5 @@
-import {TreasuryApprovalCenter} from "@/components/treasury/TreasuryApprovalCenter";
+import { redirect } from "next/navigation";
 
 export default function Page(){
-  return <TreasuryApprovalCenter/>;
+  redirect("/approvals");
 }
