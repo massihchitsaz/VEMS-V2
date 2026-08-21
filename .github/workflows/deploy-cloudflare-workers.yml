@@ -24,11 +24,11 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Show runtime
+        id: runtime
+        run: |
+          node --version
+          npm --version
 
       - name: Install dependencies
         id: install
@@ -54,6 +54,7 @@ jobs:
         if: always()
         shell: bash
         env:
+          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
           INSTALL_OUTCOME: ${{ steps.install.outcome }}
           AUTH_OUTCOME: ${{ steps.auth.outcome }}
           QUALITY_OUTCOME: ${{ steps.quality.outcome }}
@@ -64,6 +65,7 @@ jobs:
           python - <<'PY'
           import json, os, datetime
           stages = {
+            "runtime": os.environ.get("RUNTIME_OUTCOME", "unknown"),
             "install": os.environ.get("INSTALL_OUTCOME", "unknown"),
             "cloudflare_auth": os.environ.get("AUTH_OUTCOME", "unknown"),
             "quality_gates": os.environ.get("QUALITY_OUTCOME", "unknown"),
