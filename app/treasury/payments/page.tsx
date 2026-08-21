@@ -1,2 +1,5 @@
-import {PaymentOperations} from "@/components/treasury/PaymentOperations";
-export default function Page(){return <PaymentOperations/>}
+import { redirect } from "next/navigation";
+
+export default function Page(){
+  redirect("/finance/payments");
+}
