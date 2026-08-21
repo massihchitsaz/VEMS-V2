@@ -1,2 +1,5 @@
-import {TreasuryForecast} from "@/components/treasury/TreasuryForecast";
-export default function Page(){return <TreasuryForecast/>}
+import { redirect } from "next/navigation";
+
+export default function Page(){
+  redirect("/cash-flow");
+}
