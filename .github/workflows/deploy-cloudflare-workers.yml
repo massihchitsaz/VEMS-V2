@@ -36,7 +36,10 @@ jobs:
 
       - name: Verify Cloudflare authentication
         id: auth
-        run: npx wrangler whoami
+        shell: bash
+        run: |
+          set -o pipefail
+          npx wrangler whoami 2>&1 | tee cloudflare-auth.log
 
       - name: Production quality gates
         id: quality
@@ -63,7 +66,7 @@ jobs:
         run: |
           mkdir -p deployments
           python - <<'PY'
-          import json, os, datetime
+          import json, os, datetime, pathlib, re
           stages = {
             "runtime": os.environ.get("RUNTIME_OUTCOME", "unknown"),
             "install": os.environ.get("INSTALL_OUTCOME", "unknown"),
@@ -72,12 +75,19 @@ jobs:
             "cloudflare_build": os.environ.get("CFBUILD_OUTCOME", "unknown"),
             "cloudflare_deploy": os.environ.get("CFDEPLOY_OUTCOME", "unknown")
           }
+          auth_log = ""
+          p = pathlib.Path("cloudflare-auth.log")
+          if p.exists():
+              auth_log = p.read_text(encoding="utf-8", errors="replace")[-2500:]
+              auth_log = re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+\-/=]+', r'\1[REDACTED]', auth_log)
+              auth_log = re.sub(r'(?i)(token[^\n:=]*[:=]\s*)[^\s]+', r'\1[REDACTED]', auth_log)
           payload = {
             "status": "success" if stages["cloudflare_deploy"] == "success" else "failed",
             "target": os.environ["TARGET_URL"],
             "source_commit": os.environ["GITHUB_SHA"],
             "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "stages": stages,
+            "cloudflare_auth_diagnostic": auth_log,
             "workflow": "deploy-cloudflare-workers.yml"
           }
           with open("deployments/cloudflare-production.json", "w", encoding="utf-8") as f:
