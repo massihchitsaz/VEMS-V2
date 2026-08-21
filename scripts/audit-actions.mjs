@@ -32,6 +32,18 @@ function textOf(node) {
   return out.replace(/\s+/g, ' ').trim();
 }
 
+function isImplicitSubmit(node, sf) {
+  let current = node.parent;
+  while (current) {
+    if (ts.isJsxElement(current)) {
+      const tag = current.openingElement.tagName.getText(sf);
+      if (tag === 'form') return !!attr(current.openingElement, 'onSubmit');
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 for (const file of roots.flatMap(walk)) {
   const source = fs.readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -43,10 +55,11 @@ for (const file of roots.flatMap(walk)) {
         if (label && actionWords.test(label)) {
           const hasOnClick = !!attr(node.openingElement, 'onClick');
           const type = attr(node.openingElement, 'type');
-          const isSubmit = !!type && type.initializer && ts.isStringLiteral(type.initializer) && type.initializer.text === 'submit';
-          if (!hasOnClick && !isSubmit) {
+          const explicitSubmit = !!type && type.initializer && ts.isStringLiteral(type.initializer) && type.initializer.text === 'submit';
+          const formSubmit = isImplicitSubmit(node, sf);
+          if (!hasOnClick && !explicitSubmit && !formSubmit) {
             const pos = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-            findings.push(`${file}:${pos.line + 1} action button "${label.slice(0, 90)}" has no onClick and is not type=submit`);
+            findings.push(`${file}:${pos.line + 1} action button "${label.slice(0, 90)}" has no executable handler`);
           }
         }
       }
