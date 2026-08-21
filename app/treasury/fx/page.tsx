@@ -1,2 +1,5 @@
-import {FxDesk} from "@/components/treasury/FxDesk";
-export default function Page(){return <FxDesk/>}
+import { redirect } from "next/navigation";
+
+export default function Page(){
+  redirect("/fx");
+}
