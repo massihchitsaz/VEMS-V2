@@ -1,2 +1,5 @@
-import { QuotationBuilder } from "@/components/commercial/QuotationBuilder";
-export default function Page(){return <QuotationBuilder/>}
+import { redirect } from "next/navigation";
+
+export default function Page(){
+  redirect("/quotations");
+}
