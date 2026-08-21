@@ -3,6 +3,8 @@ name: Deploy VEMS-V2 to Cloudflare Workers
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - deployments/cloudflare-production.json
   workflow_dispatch:
 
 concurrency:
@@ -11,12 +13,14 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip cf-deploy]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: read
+      contents: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.VEMS_TOKEN_NEW }}
+      TARGET_URL: https://vems-v2.massih-chitsaz.workers.dev
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -39,5 +43,28 @@ jobs:
       - name: Build OpenNext for Cloudflare
         run: npx opennextjs-cloudflare build
 
-      - name: Deploy vems-v2 Worker
+      - name: Deploy canonical VEMS-V2 Worker
         run: npx opennextjs-cloudflare deploy
+
+      - name: Record successful deployment
+        shell: bash
+        run: |
+          mkdir -p deployments
+          python - <<'PY'
+          import json, os, datetime
+          payload = {
+            "status": "success",
+            "target": os.environ["TARGET_URL"],
+            "source_commit": os.environ["GITHUB_SHA"],
+            "deployed_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "workflow": "deploy-cloudflare-workers.yml"
+          }
+          with open("deployments/cloudflare-production.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2)
+              f.write("\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deployments/cloudflare-production.json
+          git diff --cached --quiet || git commit -m "Record Cloudflare production deploy [skip cf-deploy]"
+          git push
