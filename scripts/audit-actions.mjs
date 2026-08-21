@@ -4,7 +4,6 @@ import ts from 'typescript';
 
 const roots = ['app', 'components'];
 const strict = process.argv.includes('--strict');
-const actionWords = /\b(save|create|update|delete|remove|submit|approve|reject|cancel|complete|settle|allocate|issue|block|unblock|assign|upload|confirm|release|hold|reconcile|convert|add|edit|send|execute|record|apply|schedule|mark|close|reopen|transfer|receive|dispatch|move|adjust)\b/i;
 const findings = [];
 
 function walk(dir) {
@@ -15,60 +14,25 @@ function walk(dir) {
     return entry.isFile() && /\.(tsx|jsx)$/.test(entry.name) ? [full] : [];
   });
 }
+function attr(node, name) {return node.attributes?.properties?.find((p) => ts.isJsxAttribute(p) && p.name.text === name)}
+function textOf(node) {let out='';function visit(n){if(ts.isJsxText(n))out+=` ${n.getText()}`;else if(ts.isStringLiteral(n))out+=` ${n.text}`;else if(ts.isJsxExpression(n)&&n.expression&&ts.isStringLiteral(n.expression))out+=` ${n.expression.text}`;ts.forEachChild(n,visit)}visit(node);return out.replace(/\s+/g,' ').trim()}
+function isImplicitSubmit(node,sf){let current=node.parent;while(current){if(ts.isJsxElement(current)){const tag=current.openingElement.tagName.getText(sf);if(tag==='form')return !!attr(current.openingElement,'onSubmit')}current=current.parent}return false}
 
-function attr(node, name) {
-  return node.attributes?.properties?.find((p) => ts.isJsxAttribute(p) && p.name.text === name);
-}
-
-function textOf(node) {
-  let out = '';
-  function visit(n) {
-    if (ts.isJsxText(n)) out += ` ${n.getText()}`;
-    else if (ts.isStringLiteral(n)) out += ` ${n.text}`;
-    else if (ts.isJsxExpression(n) && n.expression && ts.isStringLiteral(n.expression)) out += ` ${n.expression.text}`;
-    ts.forEachChild(n, visit);
+for(const file of roots.flatMap(walk)){
+ const source=fs.readFileSync(file,'utf8');
+ const sf=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+ function visit(node){
+  if(ts.isJsxElement(node)&&node.openingElement.tagName.getText(sf)==='button'){
+   const hasOnClick=!!attr(node.openingElement,'onClick');
+   const type=attr(node.openingElement,'type');
+   const explicitSubmit=!!type&&type.initializer&&ts.isStringLiteral(type.initializer)&&type.initializer.text==='submit';
+   const formSubmit=isImplicitSubmit(node,sf);
+   if(!hasOnClick&&!explicitSubmit&&!formSubmit){const pos=sf.getLineAndCharacterOfPosition(node.getStart(sf));const label=textOf(node)||'(unlabelled)';findings.push(`${file}:${pos.line+1} button "${label.slice(0,90)}" has no executable handler`)}
   }
-  visit(node);
-  return out.replace(/\s+/g, ' ').trim();
+  ts.forEachChild(node,visit)
+ }
+ visit(sf)
 }
-
-function isImplicitSubmit(node, sf) {
-  let current = node.parent;
-  while (current) {
-    if (ts.isJsxElement(current)) {
-      const tag = current.openingElement.tagName.getText(sf);
-      if (tag === 'form') return !!attr(current.openingElement, 'onSubmit');
-    }
-    current = current.parent;
-  }
-  return false;
-}
-
-for (const file of roots.flatMap(walk)) {
-  const source = fs.readFileSync(file, 'utf8');
-  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  function visit(node) {
-    if (ts.isJsxElement(node)) {
-      const tag = node.openingElement.tagName.getText(sf);
-      if (tag === 'button') {
-        const label = textOf(node);
-        if (label && actionWords.test(label)) {
-          const hasOnClick = !!attr(node.openingElement, 'onClick');
-          const type = attr(node.openingElement, 'type');
-          const explicitSubmit = !!type && type.initializer && ts.isStringLiteral(type.initializer) && type.initializer.text === 'submit';
-          const formSubmit = isImplicitSubmit(node, sf);
-          if (!hasOnClick && !explicitSubmit && !formSubmit) {
-            const pos = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-            findings.push(`${file}:${pos.line + 1} action button "${label.slice(0, 90)}" has no executable handler`);
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(sf);
-}
-
-console.log(`VEMS UI action audit: ${findings.length} potential decorative action button(s).`);
-for (const item of findings) console.log(`ACTION_AUDIT: ${item}`);
-if (strict && findings.length) process.exit(1);
+console.log(`VEMS UI button audit: ${findings.length} decorative/non-executable button(s).`);
+for(const item of findings)console.log(`ACTION_AUDIT: ${item}`);
+if(strict&&findings.length)process.exit(1);
