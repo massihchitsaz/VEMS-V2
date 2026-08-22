@@ -1,8 +1,8 @@
 {
   "status": "failed",
   "target": "https://vems-v2.massih-chitsaz.workers.dev",
-  "source_commit": "d514876cee3f844a3fa06e8bb4101dbbce04b23a",
-  "checked_at_utc": "2026-08-21T23:55:46.856501+00:00",
+  "source_commit": "b835b6914153e79922e3fd0d1ee9752b4945fd79",
+  "checked_at_utc": "2026-08-22T00:00:01.280548+00:00",
   "stages": {
     "runtime": "success",
     "install": "success",
