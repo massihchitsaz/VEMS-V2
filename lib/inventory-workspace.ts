@@ -63,8 +63,8 @@ function pick(v: any, fields: string[]) {
   for (const key of fields) if (Object.prototype.hasOwnProperty.call(v, key)) out[key] = normalize(v[key]);
   return out;
 }
-function requireSaved(data:any,label:string){
-  if(!data?.id) throw new Error(`${label} save returned no persisted record.`);
+function requireResult(data:any,label:string,keys:string[]=["id"]){
+  if(!data || !keys.some(key=>data[key]!==undefined&&data[key]!==null)) throw new Error(`${label} returned no persisted result.`);
   return data;
 }
 
@@ -79,40 +79,40 @@ export async function saveWarehouse(v: any) {
   await assertInventoryWriteAccess();
   const s = sb(); const payload = { ...pick(v, warehouseFields), updated_at: new Date().toISOString() };
   const q = v.id ? s.from("warehouses").update(payload).eq("id", v.id).select("*").single() : s.from("warehouses").insert(payload).select("*").single();
-  const { data, error } = await q; if (error) throw error; return requireSaved(data,"Warehouse");
+  const { data, error } = await q; if (error) throw error; return requireResult(data,"Warehouse");
 }
 export async function saveLocation(v: any) {
   await assertInventoryWriteAccess();
   const s = sb(); const payload = pick(v, locationFields);
   for (const key of ["capacity_qty", "temperature_min_c", "temperature_max_c"]) if (payload[key] !== null && payload[key] !== undefined) payload[key] = Number(payload[key]);
   const q = v.id ? s.from("warehouse_locations").update(payload).eq("id", v.id).select("*").single() : s.from("warehouse_locations").insert(payload).select("*").single();
-  const { data, error } = await q; if (error) throw error; return requireSaved(data,"Warehouse location");
+  const { data, error } = await q; if (error) throw error; return requireResult(data,"Warehouse location");
 }
 export async function saveItem(v: any) {
   await assertInventoryWriteAccess();
   const s = sb(); const payload = { ...pick(v, itemFields), min_stock: Number(v.min_stock || 0), reorder_point: Number(v.reorder_point || 0), updated_at: new Date().toISOString() };
   const q = v.id ? s.from("inventory_items").update(payload).eq("id", v.id).select("*").single() : s.from("inventory_items").insert(payload).select("*").single();
-  const { data, error } = await q; if (error) throw error; return requireSaved(data,"Inventory item");
+  const { data, error } = await q; if (error) throw error; return requireResult(data,"Inventory item");
 }
 export async function saveLot(v: any) {
   await assertInventoryWriteAccess();
   const s = sb();
   if (!v.id) {
     const payload = { ...pick(v, [...lotFields, "stock_status", "qty_on_hand", "qty_reserved"]), qty_on_hand: Number(v.qty_on_hand || 0), qty_reserved: Number(v.qty_reserved || 0), gross_weight_kg: v.gross_weight_kg ? Number(v.gross_weight_kg) : null, net_weight_kg: v.net_weight_kg ? Number(v.net_weight_kg) : null, volume_cbm: v.volume_cbm ? Number(v.volume_cbm) : null };
-    const { data, error } = await s.rpc("inventory_receive_stock_v3", { p_payload: payload }); if (error) throw error; return requireSaved(data,"Stock receipt");
+    const { data, error } = await s.rpc("inventory_receive_stock_v3", { p_payload: payload }); if (error) throw error; return requireResult(data,"Stock receipt",["lot_id","movement_id"]);
   }
   const { data: current, error: readError } = await s.from("inventory_lots").select("qty_on_hand,qty_reserved,stock_status").eq("id", v.id).single();
   if (readError) throw readError;
   if (Number(v.qty_on_hand || 0) !== Number(current.qty_on_hand || 0) || Number(v.qty_reserved || 0) !== Number(current.qty_reserved || 0)) throw new Error("Stock balances cannot be edited directly. Use Stock Movement or Reservation workflows.");
   if (v.stock_status && v.stock_status !== current.stock_status) throw new Error("Stock status cannot be edited directly. Use Hold, Release, Quarantine or other controlled workflows.");
   const payload: Record<string, any> = pick(v, lotFields); payload.gross_weight_kg = v.gross_weight_kg ? Number(v.gross_weight_kg) : null; payload.net_weight_kg = v.net_weight_kg ? Number(v.net_weight_kg) : null; payload.volume_cbm = v.volume_cbm ? Number(v.volume_cbm) : null; payload.updated_at = new Date().toISOString();
-  const { data, error } = await s.from("inventory_lots").update(payload).eq("id", v.id).select("*").single(); if (error) throw error; return requireSaved(data,"Inventory lot");
+  const { data, error } = await s.from("inventory_lots").update(payload).eq("id", v.id).select("*").single(); if (error) throw error; return requireResult(data,"Inventory lot");
 }
-export async function addMovement(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, movementFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_movement_v2", { p_payload: payload }); if (error) throw error; return requireSaved(data,"Inventory movement"); }
-export async function addReservation(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, reservationFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_reservation_v2", { p_payload: payload }); if (error) throw error; return requireSaved(data,"Inventory reservation"); }
-export async function releaseReservation(id: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_release_reservation_v2", { p_reservation_id: id }); if (error) throw error; return data; }
-export async function fulfillReservation(id: string, referenceNo?: string, reason?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_fulfill_reservation_v1", { p_reservation_id: id, p_reference_no: referenceNo || null, p_reason: reason || null }); if (error) throw error; return requireSaved(data,"Reservation fulfillment"); }
-export async function setLotHold(lotId: string, hold: boolean, reason: string, referenceNo?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_set_lot_hold_v1", { p_lot_id: lotId, p_hold: hold, p_reason: reason, p_reference_no: referenceNo || null }); if (error) throw error; return requireSaved(data,"Lot hold control"); }
+export async function addMovement(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, movementFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_movement_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory movement"); }
+export async function addReservation(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, reservationFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_reservation_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory reservation"); }
+export async function releaseReservation(id: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_release_reservation_v2", { p_reservation_id: id }); if (error) throw error; return requireResult(data,"Reservation release",["released","reservation_id","status"]); }
+export async function fulfillReservation(id: string, referenceNo?: string, reason?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_fulfill_reservation_v1", { p_reservation_id: id, p_reference_no: referenceNo || null, p_reason: reason || null }); if (error) throw error; return requireResult(data,"Reservation fulfillment",["fulfilled","reservation_id","movement_id"]); }
+export async function setLotHold(lotId: string, hold: boolean, reason: string, referenceNo?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_set_lot_hold_v1", { p_lot_id: lotId, p_hold: hold, p_reason: reason, p_reference_no: referenceNo || null }); if (error) throw error; return requireResult(data,"Lot hold control",["changed","status","event_id"]); }
 
 export async function reserveFefo(v: any) {
   await assertInventoryWriteAccess();
@@ -121,8 +121,7 @@ export async function reserveFefo(v: any) {
   payload.quantity = Number(v.quantity || 0);
   const { data, error } = await s.rpc("inventory_reserve_fefo_v1", { p_payload: payload });
   if (error) throw error;
-  if (!data) throw new Error("FEFO reservation returned no persisted result.");
-  return data;
+  return requireResult(data,"FEFO reservation",["reservations","reservation_ids","quantity","allocated"]);
 }
 
 export async function linkInventoryLot(v: any) {
@@ -131,6 +130,5 @@ export async function linkInventoryLot(v: any) {
   const payload = pick(v, ["lot_id", "shipment_id", "deal_id", "customer_id", "owner_type", "owner_name", "reference_no", "reason"]);
   const { data, error } = await s.rpc("inventory_link_lot_v1", { p_payload: payload });
   if (error) throw error;
-  if (!data) throw new Error("Inventory linkage returned no persisted result.");
-  return data;
+  return requireResult(data,"Inventory linkage",["lot_id","event_id","linked"]);
 }
