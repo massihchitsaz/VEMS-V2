@@ -17,16 +17,60 @@ export async function listQuotationWorkspace(){
 
 function quoteError(error:any,quotationNo:string){
   if(error?.code==="23505"||/already in use|duplicate/i.test(error?.message||""))return new Error(`Quotation number ${quotationNo} is already in use.`);
-  if(/jwt|session|authentication|not authenticated/i.test(`${error?.message||""} ${error?.details||""}`))return new Error("Your session is no longer valid. Please sign in again and retry.");
+  if(/jwt|session|authentication|not authenticated|not logged in/i.test(`${error?.message||""} ${error?.details||""}`))return new Error("Your session is no longer valid. Please sign in again and retry.");
   const detail=[error?.message,error?.details,error?.hint].filter(Boolean).join(" · ");
   return new Error(detail||"Unable to save quotation.");
 }
 
+function cleanLines(lines:QuoteLine[]){
+  return (lines??[]).map(x=>({
+    description:(x.description||"").trim(),
+    qty:Number.isFinite(Number(x.qty))?Number(x.qty):1,
+    unit:(x.unit||"Unit").trim()||"Unit",
+    cost:Number.isFinite(Number(x.cost))?Number(x.cost):0,
+    sell:Number.isFinite(Number(x.sell))?Number(x.sell):0
+  }));
+}
+
 export async function saveQuotation(p:QuotePayload){
-  const s=createClient(); const quotationNo=(p.quotation_no??"").trim();
-  const payload={...p,id:p.id||"",quotation_no:quotationNo||null,customer_id:p.customer_id||null,supplier_id:p.supplier_id||null,opportunity_id:p.opportunity_id||null,title:(p.title||"").trim()||"Untitled quotation",lines:(p.lines??[]).map(x=>({description:(x.description||"").trim(),qty:Number.isFinite(Number(x.qty))?Number(x.qty):1,unit:(x.unit||"Unit").trim()||"Unit",cost:Number.isFinite(Number(x.cost))?Number(x.cost):0,sell:Number.isFinite(Number(x.sell))?Number(x.sell):0}))};
+  const s=createClient();
+  const quotationNo=(p.quotation_no??"").trim();
+
+  const{data:userData,error:userError}=await s.auth.getUser();
+  if(userError||!userData.user)throw quoteError(userError??new Error("Not authenticated"),quotationNo);
+
+  const lines=cleanLines(p.lines);
+  if(lines.some(x=>x.qty<0||x.cost<0||x.sell<0))throw new Error("Quotation quantities and rates cannot be negative.");
+
+  const payload={
+    ...p,
+    id:p.id||"",
+    quotation_no:quotationNo||null,
+    customer_id:p.customer_id||null,
+    supplier_id:p.supplier_id||null,
+    opportunity_id:p.opportunity_id||null,
+    title:(p.title||"").trim()||"Untitled quotation",
+    lines
+  };
+
   const{data,error}=await s.rpc("save_quotation_v4",{p_payload:payload});
-  if(error)throw quoteError(error,quotationNo); if(!data?.id)throw new Error("Quotation save completed without returning a valid record."); return data;
+  if(error)throw quoteError(error,quotationNo);
+  if(!data?.id)throw new Error("Quotation save completed without returning a valid record.");
+
+  // Do not trust a success toast alone. Re-read the record and its lines from the database.
+  const{data:persisted,error:verifyError}=await s
+    .from("quotations")
+    .select("*,quotation_items(*)")
+    .eq("id",data.id)
+    .single();
+  if(verifyError)throw quoteError(verifyError,quotationNo);
+  if(!persisted?.id)throw new Error("Quotation was not found after save. The save has not been confirmed.");
+
+  const expectedLines=lines.filter(x=>x.description.length>0).length;
+  const persistedLines=Array.isArray(persisted.quotation_items)?persisted.quotation_items.length:0;
+  if(persistedLines!==expectedLines)throw new Error(`Quotation header was saved but line verification failed (${persistedLines}/${expectedLines}).`);
+
+  return persisted;
 }
 
 export async function updateQuotationStatus(_id?:string,_status?:string){throw new Error("Quotation status is controlled by Commercial Flow. Use Submit / Approve / Reject actions.")}
