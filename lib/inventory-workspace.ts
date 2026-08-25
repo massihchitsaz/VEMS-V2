@@ -23,8 +23,10 @@ export async function getInventoryAccess(): Promise<InventoryAccess> {
 
 async function assertInventoryWriteAccess() {
   const s = sb();
+  const { data: { session }, error: sessionError } = await s.auth.getSession();
+  if (sessionError || !session?.user?.id) throw new Error("Your session is no longer valid. Please sign in again before posting inventory changes.");
   const { data: userData, error: userError } = await s.auth.getUser();
-  if (userError || !userData.user) throw new Error("Your session is no longer valid. Please sign in again before posting inventory changes.");
+  if (userError || !userData.user) throw new Error("Your session could not be verified. Please sign in again before posting inventory changes.");
   const access = await getInventoryAccess();
   if (!access.canWrite) {
     throw new Error(`Inventory is read-only for the ${access.role || "current"} role. A Manager, CEO, Admin, Warehouse, Operations or Logistics role is required for this action.`);
@@ -108,9 +110,9 @@ export async function saveLot(v: any) {
   const payload: Record<string, any> = pick(v, lotFields); payload.gross_weight_kg = v.gross_weight_kg ? Number(v.gross_weight_kg) : null; payload.net_weight_kg = v.net_weight_kg ? Number(v.net_weight_kg) : null; payload.volume_cbm = v.volume_cbm ? Number(v.volume_cbm) : null; payload.updated_at = new Date().toISOString();
   const { data, error } = await s.from("inventory_lots").update(payload).eq("id", v.id).select("*").single(); if (error) throw error; return requireResult(data,"Inventory lot");
 }
-export async function addMovement(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, movementFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_movement_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory movement"); }
-export async function addReservation(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, reservationFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_reservation_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory reservation"); }
-export async function releaseReservation(id: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_release_reservation_v2", { p_reservation_id: id }); if (error) throw error; return requireResult(data,"Reservation release",["released","reservation_id","status"]); }
+export async function addMovement(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, movementFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_movement_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory movement",["id","movement_no"]); }
+export async function addReservation(v: any) { await assertInventoryWriteAccess(); const s = sb(); const payload = pick(v, reservationFields); payload.quantity = Number(v.quantity || 0); const { data, error } = await s.rpc("inventory_add_reservation_v2", { p_payload: payload }); if (error) throw error; return requireResult(data,"Inventory reservation",["id","reservation_no"]); }
+export async function releaseReservation(id: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_release_reservation_v2", { p_reservation_id: id }); if (error) throw error; return requireResult(data,"Reservation release",["released","status"]); }
 export async function fulfillReservation(id: string, referenceNo?: string, reason?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_fulfill_reservation_v1", { p_reservation_id: id, p_reference_no: referenceNo || null, p_reason: reason || null }); if (error) throw error; return requireResult(data,"Reservation fulfillment",["fulfilled","reservation_id","movement_id"]); }
 export async function setLotHold(lotId: string, hold: boolean, reason: string, referenceNo?: string) { await assertInventoryWriteAccess(); const s = sb(); const { data, error } = await s.rpc("inventory_set_lot_hold_v1", { p_lot_id: lotId, p_hold: hold, p_reason: reason, p_reference_no: referenceNo || null }); if (error) throw error; return requireResult(data,"Lot hold control",["changed","status","event_id"]); }
 
@@ -121,7 +123,9 @@ export async function reserveFefo(v: any) {
   payload.quantity = Number(v.quantity || 0);
   const { data, error } = await s.rpc("inventory_reserve_fefo_v1", { p_payload: payload });
   if (error) throw error;
-  return requireResult(data,"FEFO reservation",["reservations","reservation_ids","quantity","allocated"]);
+  const result=requireResult(data,"FEFO reservation",["reserved","allocations"]);
+  if(!Array.isArray(result.allocations)||result.allocations.length===0) throw new Error("FEFO reservation returned no lot allocations.");
+  return result;
 }
 
 export async function linkInventoryLot(v: any) {
@@ -130,5 +134,5 @@ export async function linkInventoryLot(v: any) {
   const payload = pick(v, ["lot_id", "shipment_id", "deal_id", "customer_id", "owner_type", "owner_name", "reference_no", "reason"]);
   const { data, error } = await s.rpc("inventory_link_lot_v1", { p_payload: payload });
   if (error) throw error;
-  return requireResult(data,"Inventory linkage",["lot_id","event_id","linked"]);
+  return requireResult(data,"Inventory linkage",["lot_id","event_id","updated"]);
 }
