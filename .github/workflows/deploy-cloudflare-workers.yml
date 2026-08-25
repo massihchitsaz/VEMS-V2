@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.VEMS_TOKEN_NEW }}
       TARGET_URL: https://vems-v2.massih-chitsaz.workers.dev
@@ -53,7 +53,7 @@ jobs:
         id: cfdeploy
         run: npx opennextjs-cloudflare deploy
 
-      - name: Record deployment result
+      - name: Deployment summary
         if: always()
         shell: bash
         env:
@@ -64,38 +64,14 @@ jobs:
           CFBUILD_OUTCOME: ${{ steps.cfbuild.outcome }}
           CFDEPLOY_OUTCOME: ${{ steps.cfdeploy.outcome }}
         run: |
-          mkdir -p deployments
-          python - <<'PY'
-          import json, os, datetime, pathlib, re
-          stages = {
-            "runtime": os.environ.get("RUNTIME_OUTCOME", "unknown"),
-            "install": os.environ.get("INSTALL_OUTCOME", "unknown"),
-            "cloudflare_auth": os.environ.get("AUTH_OUTCOME", "unknown"),
-            "quality_gates": os.environ.get("QUALITY_OUTCOME", "unknown"),
-            "cloudflare_build": os.environ.get("CFBUILD_OUTCOME", "unknown"),
-            "cloudflare_deploy": os.environ.get("CFDEPLOY_OUTCOME", "unknown")
-          }
-          auth_log = ""
-          p = pathlib.Path("cloudflare-auth.log")
-          if p.exists():
-              auth_log = p.read_text(encoding="utf-8", errors="replace")[-2500:]
-              auth_log = re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+\-/=]+', r'\1[REDACTED]', auth_log)
-              auth_log = re.sub(r'(?i)(token[^\n:=]*[:=]\s*)[^\s]+', r'\1[REDACTED]', auth_log)
-          payload = {
-            "status": "success" if stages["cloudflare_deploy"] == "success" else "failed",
-            "target": os.environ["TARGET_URL"],
-            "source_commit": os.environ["GITHUB_SHA"],
-            "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "stages": stages,
-            "cloudflare_auth_diagnostic": auth_log,
-            "workflow": "deploy-cloudflare-workers.yml"
-          }
-          with open("deployments/cloudflare-production.json", "w", encoding="utf-8") as f:
-              json.dump(payload, f, indent=2)
-              f.write("\n")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deployments/cloudflare-production.json
-          git diff --cached --quiet || git commit -m "Record Cloudflare deployment result [skip cf-deploy]"
-          git push
+          {
+            echo '## VEMS-V2 Cloudflare deployment'
+            echo
+            echo "- Target: $TARGET_URL"
+            echo "- Runtime: $RUNTIME_OUTCOME"
+            echo "- Install: $INSTALL_OUTCOME"
+            echo "- Cloudflare authentication: $AUTH_OUTCOME"
+            echo "- Production quality gates: $QUALITY_OUTCOME"
+            echo "- Cloudflare build: $CFBUILD_OUTCOME"
+            echo "- Cloudflare deploy: $CFDEPLOY_OUTCOME"
+          } >> "$GITHUB_STEP_SUMMARY"
