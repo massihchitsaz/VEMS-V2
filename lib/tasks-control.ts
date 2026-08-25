@@ -21,19 +21,21 @@ export async function getTaskWorkspace(){
   ]);
   if(t.error)throw t.error;
   if(u.error)throw u.error;
-  return{tasks:t.data??[],users:u.data??[]};
+  const tasks=(t.data??[]).map((row:any)=>({...row,entity_id:row.entity_id||row.entity_reference||""}));
+  return{tasks,users:u.data??[]};
 }
 
 export async function saveTask(input:TaskInput,id?:string){
   const s=db();
-  const entityId=(input.entity_id||"").trim();
-  if(entityId&&!uuid.test(entityId))throw new Error("Related record ID must be a valid system UUID. Use Reference for human-readable numbers such as quotation or shipment numbers.");
+  const related=(input.entity_id||"").trim();
+  const entityId=related&&uuid.test(related)?related:null;
+  const entityReference=(input.entity_reference||(!entityId?related:""))?.trim()||null;
   const payload:any={
     title:input.title.trim(),
     description:input.description?.trim()||null,
     entity_type:input.entity_type||null,
-    entity_id:entityId||null,
-    entity_reference:input.entity_reference?.trim()||null,
+    entity_id:entityId,
+    entity_reference:entityReference,
     assigned_to:input.assigned_to||null,
     priority:input.priority||"medium",
     status:input.status||"open",
