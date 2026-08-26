@@ -47,11 +47,11 @@ export async function getDocumentCenter(){
   return {
     documents:(docs.data??[]) as unknown as DocumentRecord[],
     links:{
-      shipment:(shipments.data??[]).map((x:any)=>({id:x.id,label:x.shipment_no})),
-      deal:(deals.data??[]).map((x:any)=>({id:x.id,label:x.deal_no})),
-      quotation:(quotes.data??[]).map((x:any)=>({id:x.id,label:x.quotation_no})),
-      customer:(customers.data??[]).map((x:any)=>({id:x.id,label:x.company_name})),
-      supplier:(suppliers.data??[]).map((x:any)=>({id:x.id,label:x.company_name}))
+      shipment:(shipments.data??[]).map((x:any)=>({id:x.id,label:x.shipment_no||"Unnamed shipment"})),
+      deal:(deals.data??[]).map((x:any)=>({id:x.id,label:x.deal_no||"Unnamed deal"})),
+      quotation:(quotes.data??[]).map((x:any)=>({id:x.id,label:x.quotation_no||"Unnumbered quotation"})),
+      customer:(customers.data??[]).map((x:any)=>({id:x.id,label:x.company_name||"Unnamed customer"})),
+      supplier:(suppliers.data??[]).map((x:any)=>({id:x.id,label:x.company_name||"Unnamed supplier"}))
     } as Record<string,LinkOption[]>,
     profiles:(profiles.data??[]).map((x:any)=>({id:x.id,label:x.full_name,role:x.role})),
     approvers:(profiles.data??[]).filter((x:any)=>["admin","ceo","manager"].includes(String(x.role))).map((x:any)=>({id:x.id,label:x.full_name,role:x.role})),
@@ -67,10 +67,21 @@ function validateFile(file:File){
   if(!allowedMime.has(mime))throw new Error(`File type ${mime} is not allowed.`);
 }
 
-const documentFields=["entity_type","entity_id","document_type","title","reference_no","module","category","effective_date","expiry_date","is_required","confidentiality","notes","parent_document_id"];
+const documentFields=["entity_type","entity_id","document_type","title","reference_no","module","category","effective_date","expiry_date","is_required","confidentiality","notes"];
+
+function validateDates(input:any){
+  const effective=input?.effective_date?new Date(`${input.effective_date}T00:00:00`):null;
+  const expiry=input?.expiry_date?new Date(`${input.expiry_date}T00:00:00`):null;
+  if(effective&&expiry&&expiry.getTime()<effective.getTime())throw new Error("Expiry date cannot be before effective date.");
+}
+
+function validateLink(input:any){
+  const type=String(input?.entity_type||"general");
+  if(type!=="general"&&!input?.entity_id)throw new Error("Select the linked record or use General as the linked entity type.");
+}
 
 export async function registerDocument(input:any,file:File){
-  validateFile(file);
+  validateFile(file);validateDates(input);validateLink(input);
   const s=createClient();const access=await getDocumentAccess();if(!access.canWrite)throw new Error(`Role ${access.role} has read-only document access.`);
   const{data:{user}}=await s.auth.getUser();if(!user)throw new Error("Authentication required");
   if(!String(input.title||"").trim())throw new Error("Document title is required.");
@@ -78,22 +89,23 @@ export async function registerDocument(input:any,file:File){
   const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
   const path=`${input.entity_type||"general"}/${input.entity_id||"unlinked"}/${crypto.randomUUID()}-${safe}`;
   const up=await s.storage.from("vtc-documents").upload(path,file,{upsert:false,contentType:file.type||undefined});if(up.error)throw up.error;
-  const payload={...pick(input,documentFields),status:"draft",file_name:file.name,storage_path:path,mime_type:file.type||"application/octet-stream",file_size:file.size,uploaded_by:user.id,version:Number(input.version||1),updated_at:new Date().toISOString()};
-  const{data,error}=await s.from("documents").insert(payload).select().single();
+  const payload={...pick(input,documentFields),file_name:file.name,storage_path:path,mime_type:file.type||"application/octet-stream",file_size:file.size};
+  const{data,error}=await s.rpc("document_register_v2",{p_payload:payload});
   if(error){await s.storage.from("vtc-documents").remove([path]);throw error;}
-  const act=await s.from("document_activity").insert({document_id:data.id,action:"uploaded",comments:`Version ${payload.version}`,actor_id:user.id});
-  if(act.error)throw act.error;
-  return data;
+  if(!data?.id){await s.storage.from("vtc-documents").remove([path]);throw new Error("Document registration did not return a valid record.");}
+  const{data:verified,error:verifyError}=await s.from("documents").select("*").eq("id",data.id).single();
+  if(verifyError||!verified?.id)throw verifyError||new Error("Document registration could not be verified.");
+  return verified as DocumentRecord;
 }
 
 export async function updateDocumentMetadata(id:string,patch:any){
+  validateDates(patch);validateLink(patch);
   const s=createClient();const access=await getDocumentAccess();if(!access.canWrite)throw new Error(`Role ${access.role} has read-only document access.`);
   const allowed=["title","reference_no","document_type","entity_type","entity_id","module","category","effective_date","expiry_date","is_required","confidentiality","notes"];
-  const payload={...pick(patch,allowed),updated_at:new Date().toISOString()};
-  const{data,error}=await s.from("documents").update(payload).eq("id",id).select().single();if(error)throw error;
-  const{data:{user}}=await s.auth.getUser();
-  if(user){const a=await s.from("document_activity").insert({document_id:id,action:"metadata_updated",comments:"Controlled metadata updated",actor_id:user.id});if(a.error)throw a.error;}
-  return data;
+  const payload=pick(patch,allowed);
+  const{data,error}=await s.rpc("document_update_metadata_v2",{p_document_id:id,p_payload:payload});if(error)throw error;
+  if(!data?.id)throw new Error("Document metadata update was not confirmed.");
+  return data as DocumentRecord;
 }
 
 export async function submitDocumentForReview(documentId:string,approverId?:string,comments?:string){
@@ -109,15 +121,34 @@ export async function cancelDocument(documentId:string,reason:string){
 export async function uploadNewVersion(parent:DocumentRecord,file:File,notes?:string){
   validateFile(file);
   if(!parent.id)throw new Error("Document not found");
-  if(parent.status==="cancelled")throw new Error("Cancelled documents cannot receive a new revision.");
-  const next=Number(parent.version??1)+1;
-  const child=await registerDocument({entity_type:parent.entity_type,entity_id:parent.entity_id,document_type:parent.document_type,title:parent.title,reference_no:parent.reference_no,module:parent.module,category:parent.category,version:next,effective_date:parent.effective_date,expiry_date:parent.expiry_date,is_required:parent.is_required,confidentiality:parent.confidentiality,notes:notes??parent.notes,parent_document_id:parent.id},file);
-  const s=createClient();const{error}=await s.rpc("document_supersede_v1",{p_parent_id:parent.id,p_child_id:child.id,p_comments:notes||null});if(error)throw error;
-  return child;
+  if(!["draft","rejected","approved"].includes(parent.status||"draft"))throw new Error("A revision can only be created from Draft, Rejected or Approved documents.");
+  const s=createClient();const access=await getDocumentAccess();if(!access.canWrite)throw new Error(`Role ${access.role} has read-only document access.`);
+  const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+  const path=`${parent.entity_type||"general"}/${parent.entity_id||"unlinked"}/revisions/${crypto.randomUUID()}-${safe}`;
+  const up=await s.storage.from("vtc-documents").upload(path,file,{upsert:false,contentType:file.type||undefined});if(up.error)throw up.error;
+  const fileMeta={file_name:file.name,storage_path:path,mime_type:file.type||"application/octet-stream",file_size:file.size};
+  const{data,error}=await s.rpc("document_register_revision_v2",{p_parent_id:parent.id,p_file:fileMeta,p_notes:notes||null});
+  if(error){await s.storage.from("vtc-documents").remove([path]);throw error;}
+  if(!data?.id){await s.storage.from("vtc-documents").remove([path]);throw new Error("Document revision was not confirmed.");}
+  return data as DocumentRecord;
 }
 
-export async function openDocument(path:string){const s=createClient();const{data,error}=await s.storage.from("vtc-documents").createSignedUrl(path,300);if(error)throw error;window.open(data.signedUrl,"_blank","noopener,noreferrer")}
-export async function downloadDocument(path:string,fileName:string){const s=createClient();const{data,error}=await s.storage.from("vtc-documents").download(path);if(error)throw error;const url=URL.createObjectURL(data);const a=document.createElement("a");a.href=url;a.download=fileName;a.click();URL.revokeObjectURL(url)}
+async function logDocumentAccess(documentId:string,action:"opened"|"downloaded"){
+  const s=createClient();const{error}=await s.rpc("document_log_access_v1",{p_document_id:documentId,p_action:action});if(error)throw error;
+}
+
+export async function openDocument(path:string,documentId?:string){
+  const s=createClient();
+  if(documentId)await logDocumentAccess(documentId,"opened");
+  const{data,error}=await s.storage.from("vtc-documents").createSignedUrl(path,300);if(error)throw error;
+  window.open(data.signedUrl,"_blank","noopener,noreferrer");
+}
+export async function downloadDocument(path:string,fileName:string,documentId?:string){
+  const s=createClient();
+  const{data,error}=await s.storage.from("vtc-documents").download(path);if(error)throw error;
+  if(documentId)await logDocumentAccess(documentId,"downloaded");
+  const url=URL.createObjectURL(data);const a=document.createElement("a");a.href=url;a.download=fileName;a.click();URL.revokeObjectURL(url);
+}
 export async function getDocumentActivity(documentId:string){const s=createClient();const{data,error}=await s.from("document_activity").select("*,actor:actor_id(full_name)").eq("document_id",documentId).order("created_at",{ascending:false});if(error)throw error;return data??[]}
 
 // Compatibility exports for legacy components that still compile with the application.
