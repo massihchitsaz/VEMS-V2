@@ -4,8 +4,17 @@ export type EnterpriseApproval={id:string;entity_type:string;entity_id:string;ap
 export type OperationalException={id:string;exception_key:string;module:string;entity_type:string;entity_id:string|null;reference:string|null;title:string;detail:string|null;severity:"low"|"medium"|"high"|"critical";owner_id:string|null;status:string;detected_at:string;due_at:string|null;resolved_at:string|null;resolution_note:string|null};
 export type EnterpriseSnapshot={commercial:{open_opportunities:number;draft_quotations:number;pending_quotations:number;active_deals:number};logistics:{active_shipments:number;delayed_shipments:number;dg_shipments:number};finance:{open_receivables:number;overdue_receivables:number;open_receivable_value:number;pending_payments:number};control:{pending_approvals:number;overdue_tasks:number;unread_notifications:number;open_exceptions:number;critical_exceptions:number};exceptions:OperationalException[]};
 export type EnterpriseTask={id:string;title:string;description:string|null;entity_type:string|null;entity_id:string|null;entity_reference:string|null;assigned_to:string|null;created_by:string|null;priority:string;status:string;due_at:string|null;completed_at:string|null;created_at:string;updated_at:string};
+
 export async function getEnterpriseApprovalQueue(){const s=createClient();const{data,error}=await s.rpc("enterprise_approval_queue_v1");if(error)throw error;return(data??[]) as EnterpriseApproval[]}
-export async function decideEnterpriseApproval(id:string,decision:"approved"|"rejected",comments?:string){const s=createClient();const{data,error}=await s.rpc("enterprise_decide_approval_v1",{p_approval_id:id,p_decision:decision,p_comments:comments||null});if(error)throw error;return data}
+export async function decideEnterpriseApproval(a:EnterpriseApproval,decision:"approved"|"rejected",comments?:string){
+ const s=createClient();let result:any;
+ if(a.entity_type==="document")result=await s.rpc("document_decide_review_v1",{p_document_id:a.entity_id,p_decision:decision,p_comments:comments||null});
+ else if(a.entity_type==="deal")result=await s.rpc("deal_decide_approval_v1",{p_approval_id:a.id,p_decision:decision,p_comments:comments||null});
+ else if(a.entity_type==="quotation")result=await s.rpc("quotation_decide_v1",{p_quotation_id:a.entity_id,p_decision:decision,p_comments:comments||null});
+ else if(a.entity_type==="payment")result=decision==="approved"?await s.rpc("finance_approve_payment_v1",{p_payment_id:a.entity_id,p_comments:comments||null}):await s.rpc("finance_cancel_payment_v1",{p_payment_id:a.entity_id,p_reason:comments||"Payment approval rejected"});
+ else result=await s.rpc("enterprise_decide_approval_v1",{p_approval_id:a.id,p_decision:decision,p_comments:comments||null});
+ if(result.error)throw result.error;return result.data;
+}
 export async function delegateEnterpriseApproval(delegateId:string,module:string,startsAt:string,endsAt:string,reason?:string){const s=createClient();const{data,error}=await s.rpc("enterprise_delegate_approval_v1",{p_delegate_id:delegateId,p_module:module||null,p_starts_at:startsAt,p_ends_at:endsAt,p_reason:reason||null});if(error)throw error;return data as string}
 export async function getEnterpriseUsers(){const s=createClient();const{data,error}=await s.from("profiles").select("id,full_name,role").eq("active",true).order("full_name");if(error)throw error;return data??[]}
 export async function getEnterpriseSnapshot(){const s=createClient();const{data,error}=await s.rpc("enterprise_control_snapshot_v1");if(error)throw error;return data as EnterpriseSnapshot}
