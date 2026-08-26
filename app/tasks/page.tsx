@@ -1,5 +1,2 @@
-import { redirect } from "next/navigation";
-
-export default function TasksPage(){
-  redirect("/commercial/tasks");
-}
+import {AttentionCenter} from "@/components/management/AttentionCenter";
+export default function TasksPage(){return <AttentionCenter/>}
