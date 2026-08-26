@@ -1,14 +1,8 @@
-import { InventoryCommandCenter } from "@/components/inventory/InventoryCommandCenter";
-import { MultiWarehouseControl } from "@/components/inventory/MultiWarehouseControl";
-import { WarehouseOperationsControl } from "@/components/inventory/WarehouseOperationsControl";
-import { InventoryIntelligenceControl } from "@/components/inventory/InventoryIntelligenceControl";
 import { InventoryAccessShell } from "@/components/inventory/InventoryAccessShell";
+import { InventoryModuleShell } from "@/components/inventory/InventoryModuleShell";
 
-export default function InventoryPage(){
+export default function InventoryPage() {
   return <InventoryAccessShell>
-    <MultiWarehouseControl/>
-    <InventoryIntelligenceControl/>
-    <WarehouseOperationsControl/>
-    <InventoryCommandCenter/>
+    <InventoryModuleShell />
   </InventoryAccessShell>;
 }
