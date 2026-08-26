@@ -1,9 +1,5 @@
-import {DocumentReadinessControl} from "@/components/administration/DocumentReadinessControl";
-import {DocumentCenterV2} from "@/components/administration/DocumentCenterV2";
+import { DocumentModuleShell } from "@/components/administration/DocumentModuleShell";
 
 export function DocumentControlWorkspace(){
-  return <>
-    <DocumentReadinessControl/>
-    <DocumentCenterV2/>
-  </>;
+  return <DocumentModuleShell/>;
 }
