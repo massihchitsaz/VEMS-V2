@@ -14,7 +14,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     env:
@@ -53,6 +53,28 @@ jobs:
         id: cfdeploy
         run: npx opennextjs-cloudflare deploy
 
+      - name: Production route smoke test
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          routes=("/" "/login" "/approvals" "/tasks" "/notifications" "/documents" "/inventory" "/quotations" "/shipping/shipments" "/operations" "/finance")
+          for route in "${routes[@]}"; do
+            echo "Checking $TARGET_URL$route"
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -L -sS -o /tmp/vems-smoke.html -w "%{http_code}" --max-time 25 "$TARGET_URL$route" || true)
+              if [[ "$code" =~ ^(200|204|301|302|303|307|308)$ ]]; then ok=1; break; fi
+              echo "Attempt $attempt returned HTTP $code; retrying..."
+              sleep 3
+            done
+            if [ "$ok" -ne 1 ]; then
+              echo "Production smoke failed for $route"
+              exit 1
+            fi
+          done
+          echo "All production routes passed HTTP smoke checks."
+
       - name: Deployment summary
         if: always()
         shell: bash
@@ -63,6 +85,7 @@ jobs:
           QUALITY_OUTCOME: ${{ steps.quality.outcome }}
           CFBUILD_OUTCOME: ${{ steps.cfbuild.outcome }}
           CFDEPLOY_OUTCOME: ${{ steps.cfdeploy.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
         run: |
           {
             echo '## VEMS-V2 Cloudflare deployment'
@@ -74,4 +97,5 @@ jobs:
             echo "- Production quality gates: $QUALITY_OUTCOME"
             echo "- Cloudflare build: $CFBUILD_OUTCOME"
             echo "- Cloudflare deploy: $CFDEPLOY_OUTCOME"
+            echo "- Production route smoke: $SMOKE_OUTCOME"
           } >> "$GITHUB_STEP_SUMMARY"
