@@ -58,6 +58,8 @@ export function QuotationBuilder() {
   const [msgTone, setMsgTone] = useState<"ok" | "error" | "info">("info");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerOpen, setCustomerOpen] = useState(false);
 
   const notify = (message: string, tone: "ok" | "error" | "info" = "info") => {
     setMsg(message);
@@ -98,6 +100,25 @@ export function QuotationBuilder() {
   };
 
   const customer = data?.customers?.find((x: any) => x.id === f.customer_id);
+  const filteredCustomers = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    const rows = data?.customers ?? [];
+    if (!q) return rows.slice(0, 20);
+    return rows
+      .filter((x: any) =>
+        [x.company_name, x.customer_code, x.contact_person]
+          .filter(Boolean)
+          .some((v: any) => String(v).toLowerCase().includes(q))
+      )
+      .slice(0, 20);
+  }, [data?.customers, customerQuery]);
+
+  const selectCustomer = (c: any) => {
+    patch("customer_id", c.id);
+    patch("contact_person", c.contact_person || "");
+    setCustomerQuery(c.company_name || "");
+    setCustomerOpen(false);
+  };
 
   const save = async () => {
     if (busy) return;
@@ -159,6 +180,8 @@ export function QuotationBuilder() {
       status: q.status || "draft",
       lines: (q.quotation_items?.length ? q.quotation_items : []).sort((a: any, b: any) => a.line_no - b.line_no).map((x: any) => ({ description: x.description, qty: Number(x.quantity), unit: x.unit || "Unit", cost: Number(x.unit_cost), sell: Number(x.unit_sell) })) || [blank()],
     });
+    setCustomerQuery(data?.customers?.find((x:any)=>x.id===q.customer_id)?.company_name || "");
+    setCustomerOpen(false);
     setView("builder");
     notify(`Editing ${q.quotation_no || "unnumbered draft"} · Revision ${q.revision || 1}`, "info");
   };
@@ -189,7 +212,7 @@ export function QuotationBuilder() {
             <p className="mt-2 text-sm text-slate-400">Build, save, revise, control and export trading and logistics quotations.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setF(empty()); setView("builder"); setMsg(""); }} className="rounded-xl border border-slate-700 px-4 py-3 text-sm">+ New Quotation</button>
+            <button onClick={() => { setF(empty()); setCustomerQuery(""); setCustomerOpen(false); setView("builder"); setMsg(""); }} className="rounded-xl border border-slate-700 px-4 py-3 text-sm">+ New Quotation</button>
             <button onClick={() => window.print()} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold">Export / Print PDF</button>
           </div>
         </header>
@@ -228,7 +251,49 @@ export function QuotationBuilder() {
                 <label className="w-full md:max-w-sm"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-blue-400">Quotation No. · Manual</span><input value={f.quotation_no} onChange={e => patch("quotation_no",e.target.value.toUpperCase())} placeholder="Enter your own quotation reference" className={`${input} font-mono`}/></label>
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <select value={f.customer_id} onChange={e => { patch("customer_id",e.target.value); const c=data?.customers?.find((x:any)=>x.id===e.target.value); if(c) patch("contact_person",c.contact_person||""); }} className={input}><option value="">Customer (optional in Draft)</option>{data?.customers?.map((x:any)=><option key={x.id} value={x.id}>{x.company_name}</option>)}</select>
+                <div className="relative">
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Customer</label>
+                  <input
+                    value={customerOpen ? customerQuery : (customer?.company_name || customerQuery)}
+                    onFocus={() => { setCustomerQuery(customer?.company_name || customerQuery); setCustomerOpen(true); }}
+                    onChange={e => { setCustomerQuery(e.target.value); if (f.customer_id) patch("customer_id", ""); setCustomerOpen(true); }}
+                    onKeyDown={e => {
+                      if (e.key === "Escape") setCustomerOpen(false);
+                      if (e.key === "Enter" && filteredCustomers.length === 1) {
+                        e.preventDefault();
+                        selectCustomer(filteredCustomers[0]);
+                      }
+                    }}
+                    placeholder="Search and select customer..."
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={customerOpen}
+                    aria-controls="quotation-customer-options"
+                    className={input}
+                  />
+                  {customerOpen && (
+                    <div id="quotation-customer-options" role="listbox" className="absolute z-40 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-700 bg-[#0a1020] p-1 shadow-2xl shadow-black/50">
+                      {filteredCustomers.map((c:any) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="option"
+                          aria-selected={f.customer_id === c.id}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => selectCustomer(c)}
+                          className={`w-full rounded-lg px-3 py-2.5 text-left transition hover:bg-blue-600/20 ${f.customer_id === c.id ? "bg-blue-600/15" : ""}`}
+                        >
+                          <span className="block text-sm font-semibold text-white">{c.company_name}</span>
+                          <span className="mt-0.5 block text-[11px] text-slate-500">
+                            {[c.customer_code, c.contact_person].filter(Boolean).join(" · ") || "Customer record"}
+                          </span>
+                        </button>
+                      ))}
+                      {filteredCustomers.length === 0 && <div className="px-3 py-4 text-center text-sm text-slate-500">No customer found. Add the customer in Customers first.</div>}
+                    </div>
+                  )}
+                  {f.customer_id && <p className="mt-1.5 text-[11px] text-emerald-400">✓ Linked to customer master record</p>}
+                </div>
                 <input value={f.contact_person} onChange={e=>patch("contact_person",e.target.value)} placeholder="Attention / Contact person" className={input}/>
                 <select value={f.supplier_id} onChange={e=>patch("supplier_id",e.target.value)} className={input}><option value="">Supplier / Agent (optional)</option>{data?.suppliers?.map((x:any)=><option key={x.id} value={x.id}>{x.company_name}</option>)}</select>
                 <select value={f.opportunity_id} onChange={e=>patch("opportunity_id",e.target.value)} className={input}><option value="">Linked Opportunity (optional)</option>{data?.opportunities?.map((x:any)=><option key={x.id} value={x.id}>{x.opportunity_no} · {x.title}</option>)}</select>
